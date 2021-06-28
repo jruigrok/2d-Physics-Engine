@@ -5,8 +5,7 @@ var mouseX = 0;
 var mouseY = 0;
 var polygons = [];
 var margin = 0.4;
-var e = 0;
-var energy = 0;
+var e = 0.5;
 var time = 0;
 
 
@@ -228,8 +227,7 @@ function draw() {
         Update(){
             var timeChange = time - this.time
             this.Move(this.xVelocity * timeChange,this.yVelocity * timeChange);
-            this.xVelocity += this.ax * timeChange;
-            this.yVelocity += this.ay * timeChange;
+            
             if(this.wVelocity != 0){
                 this.Rotate(this.wVelocity * timeChange,this.comX,this.comY);
             }
@@ -239,9 +237,8 @@ function draw() {
                     checkCollision(this,polygons[i]);
                 }
             }
-            energy += 0.5 * this.inertia * (this.wVelocity*this.wVelocity);
-            var velocity = Math.sqrt((this.xVelocity * this.xVelocity) + (this.yVelocity * this.yVelocity));
-            energy += 0.5 * this.mass * (velocity * velocity);
+            this.xVelocity += this.ax * timeChange;
+            this.yVelocity += this.ay * timeChange;
         }
         
         Move(distanceX,distanceY){
@@ -361,46 +358,114 @@ function draw() {
                         }
                     }
                 }
-                min = Infinity;
-                var distances = [];
-                var distanceNum = 0;
-                var x = 0;
-                var y = 0;
+                //min = Infinity;
+                //var distances = [];
+                //var distanceNum = 0;
+                //var x = 0;
+                //var y = 0;
+                var distance1 = 0;
+                var distance2 = 0;
+                var ob1Point2 = 0;
+                var ob2Point2 = 0;
+                var ob1Distance = 0;
+                var ob2Distance = 0;
 
                 if(ob1Point + 1 == axisPoints1.length){
-                    distances.push( Math.abs(axisPoints1[ob1Point] - axisPoints1[0]) );
+                    distance1 = Math.abs(axisPoints1[ob1Point] - axisPoints1[0]);
                 }else{
-                    distances.push( Math.abs(axisPoints1[ob1Point] - axisPoints1[ob1Point + 1]) );
+                    distance1 = Math.abs(axisPoints1[ob1Point] - axisPoints1[ob1Point + 1]);
                 }
 
                 if(ob1Point == 0){
-                    distances.push( Math.abs(axisPoints1[ob1Point] - axisPoints1[axisPoints1.length - 1]) );
+                    distance2 = Math.abs(axisPoints1[ob1Point] - axisPoints1[axisPoints1.length - 1]);
                 }else{
-                    distances.push( Math.abs(axisPoints1[ob1Point] - axisPoints1[ob1Point - 1]) );
+                    distance2 = Math.abs(axisPoints1[ob1Point] - axisPoints1[ob1Point - 1]);
+                }
+
+                if(distance1 < distance2){
+                    if(ob1Point + 1 == axisPoints1.length){
+                        ob1Point2 = 0;
+                    }else{
+                        ob1Point2 = ob1Point + 1;
+                    }
+                    ob1Distance = distance1;
+                }else{
+                    if(ob1Point == 0){
+                        ob1Point2 = axisPoints1.length - 1;
+                    }else{
+                        ob1Point2 = ob1Point - 1;
+                    }
+                    ob1Distance = distance2;
                 }
 
                 if(ob2Point + 1 == axisPoints2.length){
-                    distances.push( Math.abs(axisPoints2[ob2Point] - axisPoints2[0]) );
+                    distance1 = Math.abs(axisPoints2[ob2Point] - axisPoints2[0]);
                 }else{
-                    distances.push( Math.abs(axisPoints2[ob2Point] - axisPoints2[ob2Point + 1]) );
+                    distance1 = Math.abs(axisPoints2[ob2Point] - axisPoints2[ob2Point + 1]);
                 }
 
                 if(ob2Point == 0){
-                    distances.push( Math.abs(axisPoints2[ob2Point] - axisPoints2[axisPoints2.length - 1]) );
+                    distance2 = Math.abs(axisPoints2[ob2Point] - axisPoints2[axisPoints2.length - 1]);
                 }else{
-                    distances.push( Math.abs(axisPoints2[ob2Point] - axisPoints2[ob2Point - 1]) );
+                    distance2 = Math.abs(axisPoints2[ob2Point] - axisPoints2[ob2Point - 1]);
                 }
 
-                for(var i = 0; i < 4; i++){
-                    if(distances[i] < min){
-                        min = distances[i];
-                        distanceNum = i;
+                if(distance1 < distance2){
+                    if(ob2Point + 1 == axisPoints2.length){
+                        ob2Point2 = 0;
+                    }else{
+                        ob2Point2 = ob2Point + 1;
+                    }
+                    ob2Distance = distance1;
+                }else{
+                    if(ob2Point == 0){
+                        ob2Point2 = axisPoints2.length - 1;
+                    }else{
+                        ob2Point2 = ob2Point - 1;
+                    }
+                    ob2Distance = distance2;
+                }
+
+                var point = false;
+                
+                if(ob1Distance > ob2Distance){
+                    if(type == 0){
+                        if(axisPoints1[ob1Point2] > axisPoints2[ob2Point]){
+                            point = true;
+                        }
+                    }else{
+                        if(axisPoints1[ob1Point2] < axisPoints2[ob2Point]){
+                            point = true;
+                        }
+                    }
+                    if(point){
+                        resolveImpulse(axisX,axisY,ob1,ob2, (ob1.x[ob1Point2] + ob1.x[ob1Point]) / 2, (ob1.y[ob1Point2] + ob1.y[ob1Point]) / 2);
+                    }else{
+                        resolveImpulse(axisX,axisY,ob1,ob2,ob1.x[ob1Point],ob1.y[ob1Point]);
+                    }
+                }else{
+                    if(type == 0){
+                        if(axisPoints2[ob2Point2] > axisPoints1[ob1Point]){
+                            point = true;
+                        }
+                    }else{
+                        if(axisPoints2[ob2Point2] < axisPoints1[ob1Point]){
+                            point = true;
+                        }
+                    }
+                    if(point){
+                        resolveImpulse(axisX,axisY,ob1,ob2,(ob2.x[ob2Point2] + ob2.x[ob2Point]) / 2, (ob2.y[ob2Point2] + ob2.y[ob2Point]) / 2);
+                    }else{
+                        resolveImpulse(axisX,axisY,ob1,ob2,ob2.x[ob2Point],ob2.y[ob2Point]);
                     }
                 }
-                
-                resolveCollision(smallestOverlap,axisX,axisY,ob1,ob2);
 
-                switch (distanceNum){
+                resolveCollision(smallestOverlap,axisX,axisY,ob1,ob2);
+                if(point){
+                    console.log(1);
+                }
+
+                /*switch (distanceNum){
                     case 0:
                         x = ob2.x[ob2Point];
                         y = ob2.y[ob2Point];
@@ -419,8 +484,7 @@ function draw() {
                         break;
                 }
 
-                resolveSpinning(axisX,axisY,ob1,ob2,x,y)
-                
+                resolveSpinning(axisX,axisY,ob1,ob2,x,y);*/
             }
         }
     }
@@ -441,7 +505,7 @@ function draw() {
         }
     }
 
-    function resolveSpinning(axisX,axisY,ob1,ob2,x,y){
+    function resolveImpulse(axisX,axisY,ob1,ob2,x,y){
         var rx1 = ob1.comX - x;
         var ry1 = ob1.comY - y;
         var rx2 = ob2.comX - x;
@@ -480,6 +544,7 @@ function draw() {
     polygons.push(new Polygon([gameArea.width,gameArea.width,gameArea.width - 50,gameArea.width - 50],[0,gameArea.height,gameArea.height,0],1,'rgb(255,0,0)'));
     polygons.push(new Polygon([50,50,gameArea.width - 50,gameArea.width - 50],[0,50,50,0],1,'rgb(255,0,0)'));
     polygons.push(new Polygon([50,50,gameArea.width - 50,gameArea.width - 50],[gameArea.height,gameArea.height - 50,gameArea.height - 50,gameArea.height],1,'rgb(255,0,0)'));
+
     /*polygons.push(new Polygon([500,800,800,500],[500,500,525,525],1,'rgb(0,255,0)'));
     polygons.push(new Polygon([500,525,525,500],[500,500,525,525],2,'rgb(0,255,0)'));
     polygons.push(new Polygon([500,525,525,500],[500,500,525,525],2,'rgb(0,255,0)'));
@@ -493,8 +558,8 @@ function draw() {
     polygons.push(new Polygon([500,525,525,500],[500,500,525,525],2,'rgb(0,255,0)'));
     polygons.push(new Polygon([1000,1025,1025,1000],[400,400,425,425],2,'rgb(0,255,0)'));*/
     //polygons[polygons.length - 1].xVelocity = -15;
-    for(var i = 0; i < 10; i++){
-        regularPolygon(gameArea.width/2,gameArea.height/2,getRndInteger(80,120),getRndInteger(3,5),getRndInteger(0,360),'rgb(255,0,0)',2);
+    for(var i = 0; i < 1; i++){
+        regularPolygon(gameArea.width/2,gameArea.height/2,getRndInteger(10,15),getRndInteger(3,5),getRndInteger(0,360),'rgb(255,0,0)',2);
         polygons[polygons.length - 1].xVelocity = getRndInteger(-1000,1000)/5;
         polygons[polygons.length - 1].yVelocity = getRndInteger(-1000,1000)/5;
         polygons[polygons.length - 1].wVelocity = getRndInteger(-50,50)/5;
@@ -509,16 +574,14 @@ function draw() {
 
     function timeUpdate(){
         time += 0.01;
-        console.log(time);
     }
 
     //Drawing and Updating
 
     function refresh(){
-        energy = 0;
+        //polygons[0].MoveTo(mouseX,mouseY);
         draw.clearRect(0, 0, gameArea.width, gameArea.height);
         renderObject(polygons);
-        //console.log(energy);
         window.requestAnimationFrame(refresh);
     }
     window.requestAnimationFrame(refresh);
