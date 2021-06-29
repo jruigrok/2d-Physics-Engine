@@ -6,16 +6,14 @@ var mouseY = 0;
 var polygons = [];
 var margin = 0.4;
 var e = 0;
-var energy = 0;
+var d = 0.1;
 var time = 0;
 
 
 function draw() {
-    
 
     //basic functions
     
-
     gameArea.width = window.innerWidth;
     gameArea.height = window.innerHeight;
     var ctx = gameArea.getContext('2d');
@@ -48,6 +46,130 @@ function draw() {
     function getRndInteger(min, max) {
       return Math.floor(Math.random() * (max - min + 1)) + min;
     }
+
+    function getStandardDeviation(array) {
+        const n = array.length
+        const mean = array.reduce((a, b) => a + b) / n
+        return Math.sqrt(array.map(x => Math.pow(x - mean, 2)).reduce((a, b) => a + b) / n)
+    }
+
+    function generateRegularPolygon(x,y,r,n,dirz,c,collisionType){
+        var X = [];
+        var Y = [];
+        var a = 0;
+        for(var i = 0; i < n; i++){
+            X[i] = (Math.sin(a + dirz) * r + x);
+            Y[i] = (Math.cos(a + dirz) * r + y);
+            a += (Math.PI * 2)/n; 
+        }
+        polygons.push(new Polygon(X,Y,collisionType,c));
+    }
+
+     function find(list,value){
+         for(var i = 0; i < list.length; i++){
+            if(list[i] == value){
+                return i;
+            }
+         }
+     }
+
+    function generateRandomPolygon(xPos,yPos,w,h,n,c,colType){
+        var x = [];
+        var y = [];
+        for(var i = 0; i < n; i++){
+            x.push(getRndInteger(0,w * 10000) / 10000);
+            y.push(getRndInteger(0,h * 10000) / 10000);
+        }
+        x.sort(function(a, b){return a-b});
+        y.sort(function(a, b){return a-b});
+        var minX = x[0];
+        var maxX = x[x.length - 1];
+        var minY = y[0];
+        var maxY = y[y.length - 1];
+        x.splice(0,1);
+        x.splice(x.length - 1,1);
+        y.splice(0,1);
+        y.splice(y.length - 1,1);
+        var x1 = [];
+        var x2 = [];
+        var y1 = [];
+        var y2 = [];
+        for(var i = 0; i < x.length; i++){
+            switch(getRndInteger(0,1)){
+                case 0:
+                    x1.push(x[i]);
+                    break;
+                case 1:
+                    x2.push(x[i]);
+                    break;
+            }
+        }
+        x1.push(maxX);
+        x2.push(maxX);
+        x1.unshift(minX);
+        x2.unshift(minX);
+        for(var i = 0; i < y.length; i++){
+            switch(getRndInteger(0,1)){
+                case 0:
+                    y1.push(y[i]);
+                    break;
+                case 1:
+                    y2.push(y[i]);
+                    break;
+            }
+        }
+        y1.push(maxY);
+        y2.push(maxY);
+        y1.unshift(minY);
+        y2.unshift(minY);
+        var xVect = [];
+        var yVect = [];
+        for(var i = 0; i < x1.length - 1; i++){
+            xVect.push(x1[i] - x1[i + 1]);
+        }
+        for(var i = 0; i < x2.length - 1; i++){
+            xVect.push(x2[i + 1] - x2[i]);
+        }
+        for(var i = 0; i < y1.length - 1; i++){
+            yVect.push(y1[i] - y1[i + 1]);
+        }
+        for(var i = 0; i < y2.length - 1; i++){
+            yVect.push(y2[i + 1] - y2[i]);
+        }
+        yVect.sort(function() { return 0.5 - Math.random() });
+        var angles = [];
+        var angles2 = [];
+        for(var i = 0; i < yVect.length; i++){
+            var angle = Math.atan(yVect[i]/xVect[i]);
+            if(xVect[i] < 0){
+                angle += Math.PI;
+            }
+            angles.push(angle);
+            angles2.push(angle)
+        }
+        angles.sort(function(a, b){return a-b});
+        var xVect2 = [];
+        var yVect2 = [];
+        
+        for(var i = 0; i < angles.length; i++){
+            j = find(angles,angles2[i]);
+            xVect2[j] = xVect[i];
+            yVect2[j] = yVect[i];
+        }
+        var lastX = xPos;
+        var lastY = yPos;
+        var xf = [];
+        var yf = [];
+        for(var i = 0; i < xVect2.length; i++){
+            xf.push(lastX);
+            yf.push(lastY);
+            lastX += xVect2[i];
+            lastY += yVect2[i];
+        }
+        polygons.push(new Polygon(xf,yf,colType,c));
+    }
+
+    //Drawing Functions
 
     function drawLine(x1,y1,x2,y2,c,w){
         ctx.lineWidth = w;
@@ -87,7 +209,7 @@ function draw() {
     }
 
     function renderObject(object){
-    deleted = 0;
+        deleted = 0;
         for (var i = 0; i < object.length; i++){
             deleted = 0;
             object[i].Render();
@@ -95,25 +217,9 @@ function draw() {
         }
     }
 
-    function regularPolygon(x,y,r,n,dirz,c,collisionType){
-        var X = [];
-        var Y = [];
-        var a = 0;
-        for(var i = 0; i < n; i++){
-            X[i] = (Math.sin(a + dirz) * r + x);
-            Y[i] = (Math.cos(a + dirz) * r + y);
-            a += (Math.PI * 2)/n; 
-        }
-        polygons.push(new Polygon(X,Y,collisionType,c));
-    }
-
-
     //objects
 
-
-
     class Polygon {
-
         constructor(x,y,collisionType,color){
             this.x = x;
             this.y = y;
@@ -143,6 +249,12 @@ function draw() {
             this.ax = 0;
             this.ay = 0;
             this.time = 0;
+            this.angle = 0;
+            this.sleep = false;
+            this.xDisplacment = [];
+            this.yDisplacment = [];
+            this.wDisplacment = [];
+            this.sleepThreshold = 1;
         }
 
         GetMinMax(){
@@ -194,6 +306,7 @@ function draw() {
         }
 
         Rotate(angle,pointX,pointY){
+            this.angle += angle;
             var cos = Math.cos(angle);
             var sin = Math.sin(angle);
             for(var i = 0; i < this.numSides; i++){
@@ -226,22 +339,55 @@ function draw() {
         }
 
         Update(){
-            var timeChange = time - this.time
-            this.Move(this.xVelocity * timeChange,this.yVelocity * timeChange);
-            this.xVelocity += this.ax * timeChange;
-            this.yVelocity += this.ay * timeChange;
-            if(this.wVelocity != 0){
-                this.Rotate(this.wVelocity * timeChange,this.comX,this.comY);
+            var timeChange = time - this.time;
+
+            if(this.xDisplacment.length > 100){
+                this.xDisplacment.splice(0,1);
+                this.yDisplacment.splice(0,1);
+                this.wDisplacment.splice(0,1);
+                this.xDisplacment.push(this.comX);
+                this.yDisplacment.push(this.comY);
+                this.wDisplacment.push(this.angle);
+                var xd = Math.abs(getStandardDeviation(this.xDisplacment));
+                var yd = Math.abs(getStandardDeviation(this.yDisplacment));
+                var wd = Math.abs(getStandardDeviation(this.wDisplacment));
+            }else{
+                this.xDisplacment.push(this.comX);
+                this.yDisplacment.push(this.comY);
+                this.wDisplacment.push(this.angle);
+                var xd = Infinity;
+                var yd = Infinity;
+                var wd = Infinity;
             }
+
+            if(xd < this.sleepThreshold && yd < this.sleepThreshold && wd < this.sleepThreshold/100){
+                this.sleep = true;
+            }else{
+                this.sleep = false;   
+            }
+
+            if(!this.sleep){
+                this.xVelocity += this.ax * timeChange;
+                this.yVelocity += this.ay * timeChange;
+                this.xVelocity -= this.xVelocity * d * timeChange;
+                this.yVelocity -= this.yVelocity * d * timeChange;
+                this.wVelocity -= this.wVelocity * d * timeChange;
+                this.Move(this.xVelocity * timeChange,this.yVelocity * timeChange);
+                if(this.wVelocity != 0){
+                    this.Rotate(this.wVelocity * timeChange,this.comX,this.comY);
+                }
+                this.color = 'rgb(0,255,0)';
+            }else{
+                this.color = 'rgb(255,0,0)';
+            }
+            
+            
             this.time = time;
             for(var i = 0; i < polygons.length; i++){
                 if(polygons[i] != this){
                     checkCollision(this,polygons[i]);
                 }
             }
-            energy += 0.5 * this.inertia * (this.wVelocity*this.wVelocity);
-            var velocity = Math.sqrt((this.xVelocity * this.xVelocity) + (this.yVelocity * this.yVelocity));
-            energy += 0.5 * this.mass * (velocity * velocity);
         }
         
         Move(distanceX,distanceY){
@@ -260,6 +406,14 @@ function draw() {
             var dx = this.dx - x;
             var dy = this.dy - y;
             this.Move(-dx,-dy);
+        }
+
+        ApplyImpulse(axisX,axisY,x,y,j){
+            var rx = this.comX - x;
+            var ry = this.comY - y;
+            this.xVelocity += (j * axisX) / this.mass;
+            this.yVelocity += (j * axisY) / this.mass;
+            this.wVelocity -= (rx * j * axisY - ry * j * axisX) / this.inertia;
         }
 
         Delete(){
@@ -397,8 +551,6 @@ function draw() {
                         distanceNum = i;
                     }
                 }
-                
-                resolveCollision(smallestOverlap,axisX,axisY,ob1,ob2);
 
                 switch (distanceNum){
                     case 0:
@@ -418,9 +570,9 @@ function draw() {
                         y = ob1.y[ob1Point];
                         break;
                 }
-
-                resolveSpinning(axisX,axisY,ob1,ob2,x,y)
+                resolveImpulse(axisX,axisY,ob1,ob2,x,y)
                 
+                resolveCollision(smallestOverlap,axisX,axisY,ob1,ob2);
             }
         }
     }
@@ -441,7 +593,7 @@ function draw() {
         }
     }
 
-    function resolveSpinning(axisX,axisY,ob1,ob2,x,y){
+    function resolveImpulse(axisX,axisY,ob1,ob2,x,y){
         var rx1 = ob1.comX - x;
         var ry1 = ob1.comY - y;
         var rx2 = ob2.comX - x;
@@ -452,73 +604,48 @@ function draw() {
         var rn2 = Math.pow((rx2 * axisY) - (ry2 * axisX),2);
         if(ob1.collisionType == 2 && ob2.collisionType == 2){
             var j = ( (-(1 + e) * (v1x * axisX + v1y * axisY)) / ( (1/ob1.mass) + (1/ob2.mass) + (rn1/ob1.inertia) + (rn2/ob2.inertia) ));
-            ob1.xVelocity += (j * axisX) / ob1.mass;
-            ob1.yVelocity += (j * axisY) / ob1.mass;
-            ob2.xVelocity -= (j * axisX) / ob2.mass;
-            ob2.yVelocity -= (j * axisY) / ob2.mass;
-            ob1.wVelocity -= (rx1 * j * axisY - ry1 * j * axisX) / ob1.inertia; 
-            ob2.wVelocity += (rx2 * j * axisY - ry2 * j * axisX) / ob2.inertia;
+            ob1.ApplyImpulse(axisX,axisY,x,y,j);
+            ob2.ApplyImpulse(axisX,axisY,x,y,-j);
         }else if(ob1.collisionType == 2 && ob2.collisionType == 1){
             v1x = (ob1.xVelocity + ob1.wVelocity * ry1);
             v1y = (ob1.yVelocity - ob1.wVelocity * rx1);
             var j = ( (-(1 + e) * (v1x * axisX + v1y * axisY)) / ( (1/ob1.mass) + (rn1/ob1.inertia) ));
-            ob1.xVelocity += (j * axisX) / ob1.mass;
-            ob1.yVelocity += (j * axisY) / ob1.mass;
-            ob1.wVelocity -= (rx1 * j * axisY - ry1 * j * axisX) / ob1.inertia; 
+            ob1.ApplyImpulse(axisX,axisY,x,y,j);
         }else if(ob1.collisionType == 1 && ob2.collisionType == 2){
             v1x = -(ob2.xVelocity + ob2.wVelocity * ry2);
             v1y = -(ob2.yVelocity - ob2.wVelocity * rx2);
             var j = ( (-(1 + e) * (v1x * axisX + v1y * axisY)) / ( (1/ob2.mass) + (rn2/ob2.inertia) ));
-            ob2.xVelocity -= (j * axisX) / ob2.mass;
-            ob2.yVelocity -= (j * axisY) / ob2.mass;
-            ob2.wVelocity += (rx2 * j * axisY - ry2 * j * axisX) / ob2.inertia;
+            ob2.ApplyImpulse(axisX,axisY,x,y,-j);
         }
     }
-
+    
+    //Object Generation
 
     polygons.push(new Polygon([0,0,50,50],[0,gameArea.height,gameArea.height,0],1,'rgb(255,0,0)'));
     polygons.push(new Polygon([gameArea.width,gameArea.width,gameArea.width - 50,gameArea.width - 50],[0,gameArea.height,gameArea.height,0],1,'rgb(255,0,0)'));
     polygons.push(new Polygon([50,50,gameArea.width - 50,gameArea.width - 50],[0,50,50,0],1,'rgb(255,0,0)'));
     polygons.push(new Polygon([50,50,gameArea.width - 50,gameArea.width - 50],[gameArea.height,gameArea.height - 50,gameArea.height - 50,gameArea.height],1,'rgb(255,0,0)'));
-    /*polygons.push(new Polygon([500,800,800,500],[500,500,525,525],1,'rgb(0,255,0)'));
-    polygons.push(new Polygon([500,525,525,500],[500,500,525,525],2,'rgb(0,255,0)'));
-    polygons.push(new Polygon([500,525,525,500],[500,500,525,525],2,'rgb(0,255,0)'));
-    polygons.push(new Polygon([500,525,525,500],[500,500,525,525],2,'rgb(0,255,0)'));
-    polygons.push(new Polygon([500,525,525,500],[500,500,525,525],2,'rgb(0,255,0)'));
-    polygons.push(new Polygon([500,525,525,500],[500,500,525,525],2,'rgb(0,255,0)'));
-    polygons.push(new Polygon([500,525,525,500],[500,500,525,525],2,'rgb(0,255,0)'));
-    polygons.push(new Polygon([500,525,525,500],[500,500,525,525],2,'rgb(0,255,0)'));
-    polygons.push(new Polygon([500,525,525,500],[500,500,525,525],2,'rgb(0,255,0)'));
-    polygons.push(new Polygon([500,525,525,500],[500,500,525,525],2,'rgb(0,255,0)'));
-    polygons.push(new Polygon([500,525,525,500],[500,500,525,525],2,'rgb(0,255,0)'));
-    polygons.push(new Polygon([1000,1025,1025,1000],[400,400,425,425],2,'rgb(0,255,0)'));*/
-    //polygons[polygons.length - 1].xVelocity = -15;
-    for(var i = 0; i < 10; i++){
-        regularPolygon(gameArea.width/2,gameArea.height/2,getRndInteger(80,120),getRndInteger(3,5),getRndInteger(0,360),'rgb(255,0,0)',2);
-        polygons[polygons.length - 1].xVelocity = getRndInteger(-1000,1000)/5;
-        polygons[polygons.length - 1].yVelocity = getRndInteger(-1000,1000)/5;
-        polygons[polygons.length - 1].wVelocity = getRndInteger(-50,50)/5;
+
+    for(var i = 0; i < 15; i++){
+        generateRandomPolygon(gameArea.width/2,500,100,100,getRndInteger(10,20),'rgb(100,100,100)',2);
     }
     for(var i = 4; i < polygons.length; i ++){
-        polygons[i].ay = 1000;
+        polygons[i].ay = 500;
     }
 
     //Time
 
-    setInterval(timeUpdate, 10);
+    setInterval(timeUpdate, );
 
     function timeUpdate(){
         time += 0.01;
-        console.log(time);
     }
-
+    
     //Drawing and Updating
-
     function refresh(){
-        energy = 0;
+        //polygons[0].MoveTo(mouseX,mouseY);
         draw.clearRect(0, 0, gameArea.width, gameArea.height);
         renderObject(polygons);
-        //console.log(energy);
         window.requestAnimationFrame(refresh);
     }
     window.requestAnimationFrame(refresh);
