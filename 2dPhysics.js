@@ -5,9 +5,13 @@ var mouseX = 0;
 var mouseY = 0;
 var polygons = [];
 var margin = 0.4;
-var e = 0;
+var e = 1;
 var d = 0.1;
-var time = 0;
+var fps = 0;
+var startTime = new Date();
+var seconds = startTime.getSeconds();
+var milliSeconds = startTime.getMilliseconds();
+var time = seconds + milliSeconds/1000;
 
 
 function draw() {
@@ -169,6 +173,27 @@ function draw() {
         polygons.push(new Polygon(xf,yf,colType,c));
     }
 
+    function renderFps(){
+        ctx.font = '32px arial';
+        ctx.strokeStyle = 'rgb(0,255,0)';
+        ctx.beginPath();
+        ctx.strokeText('FPS: ' + fps,gameArea.width - 150,35);
+        ctx.stroke();
+    }
+
+    function refreshTime(){
+        var currentTime = new Date();
+        var newTime = currentTime.getMilliseconds(); - startTime.getMilliseconds();
+        var last = time;
+        if(newTime < milliSeconds){
+            seconds++;
+        }
+        milliSeconds = newTime;
+        time = milliSeconds/1000
+        time += seconds;
+        fps = Math.round(1 / (time - last));
+    }
+
     //Drawing Functions
 
     function drawLine(x1,y1,x2,y2,c,w){
@@ -248,13 +273,13 @@ function draw() {
             this.GetMags();
             this.ax = 0;
             this.ay = 0;
-            this.time = 0;
+            this.time = time;
             this.angle = 0;
             this.sleep = false;
             this.xDisplacment = [];
             this.yDisplacment = [];
             this.wDisplacment = [];
-            this.sleepThreshold = 1;
+            this.sleepThreshold = 0.1;
         }
 
         GetMinMax(){
@@ -341,7 +366,7 @@ function draw() {
         Update(){
             var timeChange = time - this.time;
 
-            if(this.xDisplacment.length > 100){
+            if(this.xDisplacment.length > 20){
                 this.xDisplacment.splice(0,1);
                 this.yDisplacment.splice(0,1);
                 this.wDisplacment.splice(0,1);
@@ -362,8 +387,6 @@ function draw() {
 
             if(xd < this.sleepThreshold && yd < this.sleepThreshold && wd < this.sleepThreshold/100){
                 this.sleep = true;
-            }else{
-                this.sleep = false;   
             }
 
             if(!this.sleep){
@@ -381,8 +404,8 @@ function draw() {
                 this.color = 'rgb(255,0,0)';
             }
             
-            
             this.time = time;
+
             for(var i = 0; i < polygons.length; i++){
                 if(polygons[i] != this){
                     checkCollision(this,polygons[i]);
@@ -425,7 +448,6 @@ function draw() {
 
 
     //collision
-
 
     function checkCollision(ob1,ob2){
         if(!(ob1.maxX >= ob2.maxX && ob2.maxX <= ob1.minX || ob2.minX >= ob1.maxX && ob2.maxX >= ob1.maxX || ob1.maxY >= ob2.maxY && ob2.maxY <= ob1.minY || ob2.minY >= ob1.maxY && ob2.maxY >= ob1.maxY)){
@@ -598,25 +620,60 @@ function draw() {
         var ry1 = ob1.comY - y;
         var rx2 = ob2.comX - x;
         var ry2 = ob2.comY - y;
-        var v1x = (ob1.xVelocity + ob1.wVelocity * ry1) - (ob2.xVelocity + ob2.wVelocity * ry2);
-        var v1y = (ob1.yVelocity - ob1.wVelocity * rx1) - (ob2.yVelocity - ob2.wVelocity * rx2);
         var rn1 = Math.pow((rx1 * axisY) - (ry1 * axisX),2);
         var rn2 = Math.pow((rx2 * axisY) - (ry2 * axisX),2);
         if(ob1.collisionType == 2 && ob2.collisionType == 2){
+            var v1x = (ob1.xVelocity + ob1.wVelocity * ry1) - (ob2.xVelocity + ob2.wVelocity * ry2);
+            var v1y = (ob1.yVelocity - ob1.wVelocity * rx1) - (ob2.yVelocity - ob2.wVelocity * rx2);
             var j = ( (-(1 + e) * (v1x * axisX + v1y * axisY)) / ( (1/ob1.mass) + (1/ob2.mass) + (rn1/ob1.inertia) + (rn2/ob2.inertia) ));
-            ob1.ApplyImpulse(axisX,axisY,x,y,j);
-            ob2.ApplyImpulse(axisX,axisY,x,y,-j);
+            if(ob1.sleep == true){
+                if(j > ob1.sleepThreshold * 100000){
+                    ob1.sleep = false;
+                    ob1ob2Impulse(rx1,rx2,ry1,ry2,rn1,rn2,ob1,ob2,axisX,axisY,x,y);
+                }else{
+                    ob2Impulse(rx2,ry2,rn2,ob2,axisX,axisY,x,y);
+                }
+            }else if(ob2.sleep == true){
+                if(j > ob2.sleepThreshold * 100000){
+                    ob2.sleep = false;
+                    ob1ob2Impulse(rx1,rx2,ry1,ry2,rn1,rn2,ob1,ob2,axisX,axisY,x,y);
+                }else{
+                    ob1Impulse(rx1,ry1,rn1,ob1,axisX,axisY,x,y);
+                }
+            }else{
+                ob1ob2Impulse(rx1,rx2,ry1,ry2,rn1,rn2,ob1,ob2,axisX,axisY,x,y);
+            }
         }else if(ob1.collisionType == 2 && ob2.collisionType == 1){
-            v1x = (ob1.xVelocity + ob1.wVelocity * ry1);
-            v1y = (ob1.yVelocity - ob1.wVelocity * rx1);
-            var j = ( (-(1 + e) * (v1x * axisX + v1y * axisY)) / ( (1/ob1.mass) + (rn1/ob1.inertia) ));
-            ob1.ApplyImpulse(axisX,axisY,x,y,j);
+
+            ob1Impulse(rx1,ry1,rn1,ob1,axisX,axisY,x,y);
+
         }else if(ob1.collisionType == 1 && ob2.collisionType == 2){
-            v1x = -(ob2.xVelocity + ob2.wVelocity * ry2);
-            v1y = -(ob2.yVelocity - ob2.wVelocity * rx2);
-            var j = ( (-(1 + e) * (v1x * axisX + v1y * axisY)) / ( (1/ob2.mass) + (rn2/ob2.inertia) ));
-            ob2.ApplyImpulse(axisX,axisY,x,y,-j);
+
+            ob2Impulse(rx2,ry2,rn2,ob2,axisX,axisY,x,y);
+           
         }
+    }
+
+    function ob1ob2Impulse(rx1,rx2,ry1,ry2,rn1,rn2,ob1,ob2,axisX,axisY,x,y){
+        var v1x = (ob1.xVelocity + ob1.wVelocity * ry1) - (ob2.xVelocity + ob2.wVelocity * ry2);
+        var v1y = (ob1.yVelocity - ob1.wVelocity * rx1) - (ob2.yVelocity - ob2.wVelocity * rx2);
+        var j = ( (-(1 + e) * (v1x * axisX + v1y * axisY)) / ( (1/ob1.mass) + (1/ob2.mass) + (rn1/ob1.inertia) + (rn2/ob2.inertia) ));
+        ob2.ApplyImpulse(axisX,axisY,x,y,-j);
+        ob1.ApplyImpulse(axisX,axisY,x,y,j);
+    }
+
+    function ob1Impulse(rx1,ry1,rn1,ob1,axisX,axisY,x,y){
+        var v1x = (ob1.xVelocity + ob1.wVelocity * ry1);
+        var v1y = (ob1.yVelocity - ob1.wVelocity * rx1);
+        var j = ( (-(1 + e) * (v1x * axisX + v1y * axisY)) / ( (1/ob1.mass) + (rn1/ob1.inertia) ));
+        ob1.ApplyImpulse(axisX,axisY,x,y,j);
+    }
+
+    function ob2Impulse(rx2,ry2,rn2,ob2,axisX,axisY,x,y){
+        var v1x = -(ob2.xVelocity + ob2.wVelocity * ry2);
+        var v1y = -(ob2.yVelocity - ob2.wVelocity * rx2);
+        var j = ( (-(1 + e) * (v1x * axisX + v1y * axisY)) / ( (1/ob2.mass) + (rn2/ob2.inertia) ));
+        ob2.ApplyImpulse(axisX,axisY,x,y,-j);
     }
     
     //Object Generation
@@ -626,26 +683,25 @@ function draw() {
     polygons.push(new Polygon([50,50,gameArea.width - 50,gameArea.width - 50],[0,50,50,0],1,'rgb(255,0,0)'));
     polygons.push(new Polygon([50,50,gameArea.width - 50,gameArea.width - 50],[gameArea.height,gameArea.height - 50,gameArea.height - 50,gameArea.height],1,'rgb(255,0,0)'));
 
-    for(var i = 0; i < 15; i++){
-        generateRandomPolygon(gameArea.width/2,500,100,100,getRndInteger(10,20),'rgb(100,100,100)',2);
+    for(var i = 0; i < 200; i++){
+        generateRandomPolygon(gameArea.width/2,500,25,25,getRndInteger(10,20),'rgb(100,100,100)',2);
+        polygons[polygons.length - 1].xVelocity = getRndInteger(-50,50);
+        polygons[polygons.length - 1].yVelocity = getRndInteger(-50,50);
+        polygons[polygons.length - 1].wVelocity = getRndInteger(-50,50);
     }
     for(var i = 4; i < polygons.length; i ++){
-        polygons[i].ay = 500;
+        //polygons[i].ay = 200;
     }
 
-    //Time
-
-    setInterval(timeUpdate, );
-
-    function timeUpdate(){
-        time += 0.01;
-    }
-    
     //Drawing and Updating
+
     function refresh(){
         //polygons[0].MoveTo(mouseX,mouseY);
         draw.clearRect(0, 0, gameArea.width, gameArea.height);
+        refreshTime();
         renderObject(polygons);
+        renderFps();
+        
         window.requestAnimationFrame(refresh);
     }
     window.requestAnimationFrame(refresh);
