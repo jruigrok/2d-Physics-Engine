@@ -3,11 +3,12 @@ var pressedKeys = [];
 var mouseDown = false;
 var mouseX = 0;
 var mouseY = 0;
-var polygons = [];
-var margin = 0.4;
-var e = 1;
-var d = 0.1;
+var bodies = [];
+var margin = 0;
+var e = 0;
+var d = 0;
 var fps = 0;
+var timeChange = 0;
 var startTime = new Date();
 var seconds = startTime.getSeconds();
 var milliSeconds = startTime.getMilliseconds();
@@ -66,7 +67,7 @@ function draw() {
             Y[i] = (Math.cos(a + dirz) * r + y);
             a += (Math.PI * 2)/n; 
         }
-        polygons.push(new Polygon(X,Y,collisionType,c));
+        bodies.push(new Polygon(X,Y,collisionType,c));
     }
 
      function find(list,value){
@@ -77,7 +78,7 @@ function draw() {
          }
      }
 
-    function generateRandomPolygon(xPos,yPos,w,h,n,c,colType){
+    function generateRandomPolygon(xPos,yPos,w,h,n,colType,material,c){
         var x = [];
         var y = [];
         for(var i = 0; i < n; i++){
@@ -170,7 +171,7 @@ function draw() {
             lastX += xVect2[i];
             lastY += yVect2[i];
         }
-        polygons.push(new Polygon(xf,yf,colType,c));
+        bodies.push(new Polygon(xf,yf,colType,material,c));
     }
 
     function renderFps(){
@@ -191,7 +192,14 @@ function draw() {
         milliSeconds = newTime;
         time = milliSeconds/1000
         time += seconds;
-        fps = Math.round(1 / (time - last));
+        timeChange = time - last;
+        //fps = Math.round(1 / (time - last));
+    }
+
+    function resetCollisions(){
+        for(var i = 0; i < bodies.length; i++){
+            bodies[i].col = [];
+        }
     }
 
     //Drawing Functions
@@ -243,9 +251,127 @@ function draw() {
     }
 
     //objects
+    class Circle {
+        constructor(x,y,r,collisionType,material,color){
+            this.x = x;
+            this.y = y;
+            this.r = r;
+            this.collisionType = collisionType;
+            this.color = color;
+            this.xVelocity = 0;
+            this.yVelocity = 0;
+            this.wVelocity = 0;
+            this.density = material.density;
+            this.restitution = material.restitution;
+            this.staticFrict = material.staticFrict;
+            this.dynamicFrict = material.dynamicFrict;
+            this.minX;
+            this.minY;
+            this.maxX;
+            this.maxY;
+            this.GetMinMax();
+            this.mass;
+            this.area;
+            this.inertia;
+            this.comX;
+            this.comY;
+            this.GetValues();
+            this.ax = 0;
+            this.ay = 0;
+            this.angle = 0;
+            this.type = 'circle';
+            this.col = [];
+        }
+
+        GetMinMax(){
+            this.minX = this.x - this.r;
+            this.minY = this.y - this.r;
+            this.maxX = this.x + this.r;
+            this.maxY = this.y + this.r;
+        }
+
+        GetValues(){
+            this.area = Math.PI * (this.r * this.r);
+            this.mass = this.area * this.density;
+            this.inertia = 0.5 * this.mass * this.r * this.r;
+            this.comX = this.x;
+            this.comY = this.y;
+        }
+
+        Rotate(angle,pointX,pointY){
+            this.angle += angle;
+            var sin = Math.sin(angle);
+            var cos = Math.cos(angle);
+            var x = pointX + ((this.x - pointX) * cos) - ((this.y - pointY) * sin);
+            var y = pointY + ((this.y - pointY) * cos) + ((this.x - pointX) * sin);
+            this.x = x;
+            this.y = y;
+        }
+
+        Render(){
+            drawCircle(this.x,this.y,this.r,this.color,false);
+            drawLine(this.x,this.y,this.x + this.r * Math.cos(this.angle),this.y + this.r * Math.sin(this.angle),this.color,1);
+            this.Update();
+        }
+
+        Update(){
+
+            this.xVelocity += this.ax * timeChange;
+            this.yVelocity += this.ay * timeChange;
+            this.xVelocity -= this.xVelocity * d * timeChange;
+            this.yVelocity -= this.yVelocity * d * timeChange;
+            this.wVelocity -= this.wVelocity * d * timeChange;
+            this.Move(this.xVelocity * timeChange,this.yVelocity * timeChange);
+            if(this.wVelocity != 0){
+                this.Rotate(this.wVelocity * timeChange,this.comX,this.comY);
+            }
+
+            for(var i = 0; i < bodies.length; i++){
+                if(bodies[i] != this){
+                    var collide = true;
+                    for(var j = 0; j < this.col.length; j++){
+                        if(this.col[j] == bodies[i]){
+                            collide = false;
+                        }
+                    }
+                    if(collide){
+                        checkCollision(this,bodies[i]);
+                    }
+                }
+            }
+            this.comX = this.x;
+            this.comY = this.y;
+        }
+
+        Move(distanceX,distanceY){
+            this.x += distanceX;
+            this.y += distanceY
+            this.GetMinMax();
+        }
+
+        MoveTo(x,y){
+            this.x = x;
+            this.y = y;
+            this.GetMinMax();
+        }
+
+        ApplyImpulse(axisX,axisY,x,y,j){
+            var rx = this.comX - x;
+            var ry = this.comY - y;
+            this.xVelocity += (j * axisX) / this.mass;
+            this.yVelocity += (j * axisY) / this.mass;
+            this.wVelocity -= (rx * j * axisY - ry * j * axisX) / this.inertia;
+        }
+
+        Delete(){
+            var indexToDelete = bodies.indexOf(this);
+            bodies.splice(indexToDelete, 1);
+            deleted += 1;
+        }
+    }
 
     class Polygon {
-        constructor(x,y,collisionType,color){
+        constructor(x,y,collisionType,material,color){
             this.x = x;
             this.y = y;
             this.collisionType = collisionType;
@@ -253,7 +379,10 @@ function draw() {
             this.xVelocity = 0;
             this.yVelocity = 0;
             this.wVelocity = 0;
-            this.density = 1;
+            this.density = material.density;
+            this.restitution = material.restitution;
+            this.staticFrict = material.staticFrict;
+            this.dynamicFrict = material.dynamicFrict;
             this.numSides = this.x.length;
             this.minX;
             this.minY;
@@ -265,7 +394,7 @@ function draw() {
             this.mass;
             this.area;
             this.inertia;
-            this.GetPolygonValues();
+            this.GetValues();
             this.dx = x[0];
             this.dy = y[0];
             this.sidesX = [];
@@ -273,13 +402,9 @@ function draw() {
             this.GetMags();
             this.ax = 0;
             this.ay = 0;
-            this.time = time;
             this.angle = 0;
-            this.sleep = false;
-            this.xDisplacment = [];
-            this.yDisplacment = [];
-            this.wDisplacment = [];
-            this.sleepThreshold = 0.1;
+            this.type = 'polygon';
+            this.col = [];
         }
 
         GetMinMax(){
@@ -289,7 +414,7 @@ function draw() {
             this.maxY = Math.max(...this.y);
         }
 
-        GetPolygonValues(){
+        GetValues(){
             var x = ((this.maxX - this.minX)/2) + this.minX;
             var y = ((this.maxY - this.minY)/2) + this.minY;
             var inertia = 0;
@@ -364,51 +489,28 @@ function draw() {
         }
 
         Update(){
-            var timeChange = time - this.time;
 
-            if(this.xDisplacment.length > 20){
-                this.xDisplacment.splice(0,1);
-                this.yDisplacment.splice(0,1);
-                this.wDisplacment.splice(0,1);
-                this.xDisplacment.push(this.comX);
-                this.yDisplacment.push(this.comY);
-                this.wDisplacment.push(this.angle);
-                var xd = Math.abs(getStandardDeviation(this.xDisplacment));
-                var yd = Math.abs(getStandardDeviation(this.yDisplacment));
-                var wd = Math.abs(getStandardDeviation(this.wDisplacment));
-            }else{
-                this.xDisplacment.push(this.comX);
-                this.yDisplacment.push(this.comY);
-                this.wDisplacment.push(this.angle);
-                var xd = Infinity;
-                var yd = Infinity;
-                var wd = Infinity;
-            }
-
-            if(xd < this.sleepThreshold && yd < this.sleepThreshold && wd < this.sleepThreshold/100){
-                this.sleep = true;
-            }
-
-            if(!this.sleep){
-                this.xVelocity += this.ax * timeChange;
-                this.yVelocity += this.ay * timeChange;
-                this.xVelocity -= this.xVelocity * d * timeChange;
-                this.yVelocity -= this.yVelocity * d * timeChange;
-                this.wVelocity -= this.wVelocity * d * timeChange;
-                this.Move(this.xVelocity * timeChange,this.yVelocity * timeChange);
-                if(this.wVelocity != 0){
-                    this.Rotate(this.wVelocity * timeChange,this.comX,this.comY);
-                }
-                this.color = 'rgb(0,255,0)';
-            }else{
-                this.color = 'rgb(255,0,0)';
+            this.xVelocity += this.ax * timeChange;
+            this.yVelocity += this.ay * timeChange;
+            this.xVelocity -= this.xVelocity * d * timeChange;
+            this.yVelocity -= this.yVelocity * d * timeChange;
+            this.wVelocity -= this.wVelocity * d * timeChange;
+            this.Move(this.xVelocity * timeChange,this.yVelocity * timeChange);
+            if(this.wVelocity != 0){
+                this.Rotate(this.wVelocity * timeChange,this.comX,this.comY);
             }
             
-            this.time = time;
-
-            for(var i = 0; i < polygons.length; i++){
-                if(polygons[i] != this){
-                    checkCollision(this,polygons[i]);
+            for(var i = 0; i < bodies.length; i++){
+                if(bodies[i] != this){
+                    var collide = true;
+                    for(var j = 0; j < this.col.length; j++){
+                        if(this.col[j] == bodies[i]){
+                            collide = false;
+                        }
+                    }
+                    if(collide){
+                        checkCollision(this,bodies[i]);
+                    }
                 }
             }
         }
@@ -440,9 +542,18 @@ function draw() {
         }
 
         Delete(){
-            var indexToDelete = polygons.indexOf(this);
-            polygons.splice(indexToDelete, 1);
+            var indexToDelete = bodies.indexOf(this);
+            bodies.splice(indexToDelete, 1);
             deleted += 1;
+        }
+    }
+
+    class Material{
+        constructor(density,restitution,staticFrict,dynamicFrict){
+            this.density = density;
+            this.restitution = restitution;
+            this.staticFrict = staticFrict;
+            this.dynamicFrict = dynamicFrict;
         }
     }
 
@@ -450,151 +561,278 @@ function draw() {
     //collision
 
     function checkCollision(ob1,ob2){
+        ob1.col.push(ob2);
+        ob2.col.push(ob1);
         if(!(ob1.maxX >= ob2.maxX && ob2.maxX <= ob1.minX || ob2.minX >= ob1.maxX && ob2.maxX >= ob1.maxX || ob1.maxY >= ob2.maxY && ob2.maxY <= ob1.minY || ob2.minY >= ob1.maxY && ob2.maxY >= ob1.maxY)){
-            ob1.GetMags();
-            ob2.GetMags();
-            var collision = true;
-            var sidesX = ob1.sidesX.concat(ob2.sidesX);
-            var sidesY = ob1.sidesY.concat(ob2.sidesY);
-            var smallestOverlap = Infinity;
-            var axisX = null;
-            var axisY = null;
-            var type = 0;
-            var axisPoints1 = [];
-            var axisPoints2 = [];
-            for(var i = 0; i < sidesX.length; i++){
-                var ob1Points = [];
-                var ob2Points = [];
-                
-                for(var j = 0; j < ob1.numSides; j++){
-                    let p = ob1.x[j] * sidesX[i] + ob1.y[j] * sidesY[i];
-                    ob1Points.push(p);
-                }
-                for(var j = 0; j < ob2.numSides; j++){
-                    let p = ob2.x[j] * sidesX[i] + ob2.y[j] * sidesY[i];
-                    ob2Points.push(p);
-                }
+            var collision =  true;
+            if(ob1.type == 'polygon' && ob2.type == 'polygon'){
+                ob1.GetMags();
+                ob2.GetMags();
+                var sidesX = ob1.sidesX.concat(ob2.sidesX);
+                var sidesY = ob1.sidesY.concat(ob2.sidesY);
+                var smallestOverlap = Infinity;
+                var axisX = null;
+                var axisY = null;
+                var type = 0;
+                var axisPoints1 = [];
+                var axisPoints2 = [];
+                for(var i = 0; i < sidesX.length; i++){
+                    var ob1Points = [];
+                    var ob2Points = [];
+                    
+                    for(var j = 0; j < ob1.numSides; j++){
+                        let p = ob1.x[j] * sidesX[i] + ob1.y[j] * sidesY[i];
+                        ob1Points.push(p);
+                    }
+                    for(var j = 0; j < ob2.numSides; j++){
+                        let p = ob2.x[j] * sidesX[i] + ob2.y[j] * sidesY[i];
+                        ob2Points.push(p);
+                    }
 
-                var ob1Max = Math.max(...ob1Points);
-                var ob1Min = Math.min(...ob1Points);
-                var ob2Max = Math.max(...ob2Points);
-                var ob2Min = Math.min(...ob2Points);
-                
-                if(!(ob1Min <= ob2Max && ob1Min >= ob2Min) && !(ob2Min <= ob1Max && ob2Min >= ob1Min)){
-                    collision = false;
-                    break;
-                }else{
-                    if(Math.abs(ob2Min - ob1Max) < Math.abs(ob2Max - ob1Min)){
-                        var overlap = ob2Min - ob1Max;
-                        var colType = 0;
+                    var ob1Max = Math.max(...ob1Points);
+                    var ob1Min = Math.min(...ob1Points);
+                    var ob2Max = Math.max(...ob2Points);
+                    var ob2Min = Math.min(...ob2Points);
+                    
+                    if(!(ob1Min <= ob2Max && ob1Min >= ob2Min) && !(ob2Min <= ob1Max && ob2Min >= ob1Min)){
+                        collision = false;
+                        break;
                     }else{
-                        var overlap = ob2Max - ob1Min;
-                        var colType = 1;
-                    }
+                        if(Math.abs(ob2Min - ob1Max) < Math.abs(ob2Max - ob1Min)){
+                            var overlap = ob2Min - ob1Max;
+                            var colType = 0;
+                        }else{
+                            var overlap = ob2Max - ob1Min;
+                            var colType = 1;
+                        }
 
-                    if(Math.abs(overlap) < Math.abs(smallestOverlap)){
-                        smallestOverlap = overlap;
-                        axisX = sidesX[i];
-                        axisY = sidesY[i]; 
-                        type = colType;
-                        axisPoints1 = ob1Points;
-                        axisPoints2 = ob2Points;
-                    }
-                }
-            }
-            
-            
-            if(collision){
-                var ob1Point = 0;
-                var ob2Point = 0;
-                var min = Infinity;
-                var max = -Infinity;
-
-                if(type == 0){
-                    for(var i = 0; i < axisPoints1.length; i++){
-                        if(axisPoints1[i] > max){
-                            max = axisPoints1[i]
-                            ob1Point = i;
-                        }
-                    }
-                    for(var i = 0; i < axisPoints2.length; i++){
-                        if(axisPoints2[i] < min){
-                            min = axisPoints2[i]
-                            ob2Point = i;
-                        }
-                    }
-                }else{
-                    for(var i = 0; i < axisPoints1.length; i++){
-                        if(axisPoints1[i] < min){
-                            min = axisPoints1[i]
-                            ob1Point = i;
-                        }
-                    }
-                    for(var i = 0; i < axisPoints2.length; i++){
-                        if(axisPoints2[i] > max){
-                            max = axisPoints2[i]
-                            ob2Point = i;
+                        if(Math.abs(overlap) < Math.abs(smallestOverlap)){
+                            smallestOverlap = overlap;
+                            axisX = sidesX[i];
+                            axisY = sidesY[i]; 
+                            type = colType;
+                            axisPoints1 = ob1Points;
+                            axisPoints2 = ob2Points;
                         }
                     }
                 }
-                min = Infinity;
-                var distances = [];
-                var distanceNum = 0;
-                var x = 0;
-                var y = 0;
-
-                if(ob1Point + 1 == axisPoints1.length){
-                    distances.push( Math.abs(axisPoints1[ob1Point] - axisPoints1[0]) );
-                }else{
-                    distances.push( Math.abs(axisPoints1[ob1Point] - axisPoints1[ob1Point + 1]) );
-                }
-
-                if(ob1Point == 0){
-                    distances.push( Math.abs(axisPoints1[ob1Point] - axisPoints1[axisPoints1.length - 1]) );
-                }else{
-                    distances.push( Math.abs(axisPoints1[ob1Point] - axisPoints1[ob1Point - 1]) );
-                }
-
-                if(ob2Point + 1 == axisPoints2.length){
-                    distances.push( Math.abs(axisPoints2[ob2Point] - axisPoints2[0]) );
-                }else{
-                    distances.push( Math.abs(axisPoints2[ob2Point] - axisPoints2[ob2Point + 1]) );
-                }
-
-                if(ob2Point == 0){
-                    distances.push( Math.abs(axisPoints2[ob2Point] - axisPoints2[axisPoints2.length - 1]) );
-                }else{
-                    distances.push( Math.abs(axisPoints2[ob2Point] - axisPoints2[ob2Point - 1]) );
-                }
-
-                for(var i = 0; i < 4; i++){
-                    if(distances[i] < min){
-                        min = distances[i];
-                        distanceNum = i;
-                    }
-                }
-
-                switch (distanceNum){
-                    case 0:
-                        x = ob2.x[ob2Point];
-                        y = ob2.y[ob2Point];
-                        break;
-                    case 1:
-                        x = ob2.x[ob2Point];
-                        y = ob2.y[ob2Point];
-                        break;
-                    case 2:
-                        x = ob1.x[ob1Point];
-                        y = ob1.y[ob1Point];
-                        break;
-                    case 3:
-                        x = ob1.x[ob1Point];
-                        y = ob1.y[ob1Point];
-                        break;
-                }
-                resolveImpulse(axisX,axisY,ob1,ob2,x,y)
                 
-                resolveCollision(smallestOverlap,axisX,axisY,ob1,ob2);
+                
+                if(collision){
+                    var ob1Point = 0;
+                    var ob2Point = 0;
+                    var min = Infinity;
+                    var max = -Infinity;
+
+                    if(type == 0){
+                        for(var i = 0; i < axisPoints1.length; i++){
+                            if(axisPoints1[i] > max){
+                                max = axisPoints1[i]
+                                ob1Point = i;
+                            }
+                        }
+                        for(var i = 0; i < axisPoints2.length; i++){
+                            if(axisPoints2[i] < min){
+                                min = axisPoints2[i]
+                                ob2Point = i;
+                            }
+                        }
+                    }else{
+                        for(var i = 0; i < axisPoints1.length; i++){
+                            if(axisPoints1[i] < min){
+                                min = axisPoints1[i]
+                                ob1Point = i;
+                            }
+                        }
+                        for(var i = 0; i < axisPoints2.length; i++){
+                            if(axisPoints2[i] > max){
+                                max = axisPoints2[i]
+                                ob2Point = i;
+                            }
+                        }
+                    }
+                    min = Infinity;
+                    var distances = [];
+                    var distanceNum = 0;
+                    var x = 0;
+                    var y = 0;
+
+                    if(ob1Point + 1 == axisPoints1.length){
+                        distances.push( Math.abs(axisPoints1[ob1Point] - axisPoints1[0]) );
+                    }else{
+                        distances.push( Math.abs(axisPoints1[ob1Point] - axisPoints1[ob1Point + 1]) );
+                    }
+
+                    if(ob1Point == 0){
+                        distances.push( Math.abs(axisPoints1[ob1Point] - axisPoints1[axisPoints1.length - 1]) );
+                    }else{
+                        distances.push( Math.abs(axisPoints1[ob1Point] - axisPoints1[ob1Point - 1]) );
+                    }
+
+                    if(ob2Point + 1 == axisPoints2.length){
+                        distances.push( Math.abs(axisPoints2[ob2Point] - axisPoints2[0]) );
+                    }else{
+                        distances.push( Math.abs(axisPoints2[ob2Point] - axisPoints2[ob2Point + 1]) );
+                    }
+
+                    if(ob2Point == 0){
+                        distances.push( Math.abs(axisPoints2[ob2Point] - axisPoints2[axisPoints2.length - 1]) );
+                    }else{
+                        distances.push( Math.abs(axisPoints2[ob2Point] - axisPoints2[ob2Point - 1]) );
+                    }
+
+                    for(var i = 0; i < 4; i++){
+                        if(distances[i] < min){
+                            min = distances[i];
+                            distanceNum = i;
+                        }
+                    }
+
+                    switch (distanceNum){
+                        case 0:
+                            x = ob2.x[ob2Point];
+                            y = ob2.y[ob2Point];
+                            break;
+                        case 1:
+                            x = ob2.x[ob2Point];
+                            y = ob2.y[ob2Point];
+                            break;
+                        case 2:
+                            x = ob1.x[ob1Point];
+                            y = ob1.y[ob1Point];
+                            break;
+                        case 3:
+                            x = ob1.x[ob1Point];
+                            y = ob1.y[ob1Point];
+                            break;
+                    }
+                    resolveCollision(smallestOverlap,axisX,axisY,ob1,ob2);
+                    resolveImpulse(axisX,axisY,ob1,ob2,x,y);
+                }
+
+            }else if(ob1.type == 'polygon' && ob2.type == 'circle' || ob2.type == 'polygon' && ob1.type == 'circle'){
+                if(ob1.type == 'circle'){
+                    var circle = ob1;
+                    var polygon = ob2;
+                }else{
+                    var circle = ob2;
+                    var polygon = ob1;
+                }
+                polygon.GetMags();
+                var smallestOverlap = Infinity;
+                var axisX = null;
+                var axisY = null;
+                var type = 0;
+
+                for(var i = 0; i < polygon.numSides; i++){
+                    var polygonPoints = [];
+                    var circlePoint = 0;
+                    for(var j = 0; j < polygon.numSides; j++){
+                        let p = polygon.x[j] * polygon.sidesX[i] + polygon.y[j] * polygon.sidesY[i];
+                        polygonPoints.push(p);
+                    }
+
+                    circlePoint = circle.x * polygon.sidesX[i] + circle.y * polygon.sidesY[i];
+                    var polygonMax = Math.max(...polygonPoints);
+                    var polygonMin = Math.min(...polygonPoints);
+                    var circleMax = circlePoint + circle.r;
+                    var circleMin = circlePoint - circle.r;
+
+                    if(!(polygonMin <= circleMax && polygonMin >= circleMin) && !(circleMin <= polygonMax && circleMin >= polygonMin)){
+                        collision = false;
+                        break;
+                    }else{
+                        if(Math.abs(circleMin - polygonMax) < Math.abs(circleMax - polygonMin)){
+                            var overlap = circleMin - polygonMax;
+                            var colType = 0;
+                        }else{
+                            var overlap = circleMax - polygonMin;
+                            var colType = 1;
+                        }
+
+                        if(Math.abs(overlap) < Math.abs(smallestOverlap)){
+                            smallestOverlap = overlap;
+                            axisX = polygon.sidesX[i];
+                            axisY = polygon.sidesY[i];
+                            type = colType;
+                            finalPolygonPoints = polygonPoints;
+                            finalCirclePoint = circlePoint;
+                        }
+                    }
+                }
+
+                if(collision){
+                    
+                    var min = Infinity;
+                    var side = 0;
+                    for(var i = 0; i < polygon.numSides; i++){
+                        var dx = polygon.x[i] - circle.x;
+                        var dy = polygon.y[i] - circle.y;
+                        var distance = (dx * dx + dy * dy);
+                        if(distance < min){
+                            side = i;
+                            min = distance;
+                        }
+                    }
+
+                    var dx = polygon.x[side] - circle.x;
+                    var dy = polygon.y[side] - circle.y;
+                    if(side == polygon.numSides - 1){
+                        var dx2 = polygon.x[side] - polygon.x[0];
+                        var dy2 = polygon.y[side] - polygon.y[0];
+                    }else{
+                        var dx2 = polygon.x[side] - polygon.x[side + 1];
+                        var dy2 = polygon.y[side] - polygon.y[side + 1];
+                    }
+                    
+                    var dot1 = dx2 * dx + dy2 * dy;
+                    if(side > 0){
+                        dx2 = polygon.x[side] - polygon.x[side - 1];
+                        dy2 = polygon.y[side] - polygon.y[side - 1];
+                    }else{
+                        dx2 = polygon.x[side] - polygon.x[polygon.numSides - 1];
+                        dy2 = polygon.y[side] - polygon.y[polygon.numSides - 1];
+                    }
+                    var dot2 = dx2 * dx + dy2 * dy;
+                    if(dot1 < 0 && dot2 < 0){
+                        var dx = polygon.x[side] - circle.x;
+                        var dy = polygon.y[side] - circle.y;
+                        var distance = Math.sqrt(dx * dx + dy * dy);
+                        if(distance < circle.r){
+                            axisX = dx / distance;
+                            axisY = dy / distance;
+                            smallestOverlap = distance - circle.r;
+                            var x = polygon.x[side];
+                            var y = polygon.y[side];
+                            resolveCollision(smallestOverlap,axisX,axisY,circle,polygon);
+                            resolveImpulse(axisX,axisY,circle,polygon,x,y);
+                        }
+                    }else{
+                        if(type == 1){
+                            var x = circle.x + (axisX * circle.r);
+                            var y = circle.y + (axisY * circle.r);
+                        }else{
+                            var x = circle.x - (axisX * circle.r);
+                            var y = circle.y - (axisY * circle.r);
+                        }
+
+                        resolveCollision(smallestOverlap,axisX,axisY,polygon,circle);
+                        resolveImpulse(axisX,axisY,polygon,circle,x,y);
+                    }
+                }
+            }else if(ob1.type == 'circle' && ob2.type == 'circle'){
+                var dx = ob2.x - ob1.x;
+                var dy = ob2.y - ob1.y;
+                var distance = Math.sqrt(dx * dx + dy * dy);
+                if(distance < ob1.r + ob2.r){
+                    var smallestOverlap = distance - (ob1.r + ob2.r);
+                    var axisX = dx / distance;
+                    var axisY = dy / distance;
+                    var x = ob1.x + (axisX * ob1.r);
+                    var y = ob1.y + (axisY * ob1.r);
+                    resolveCollision(smallestOverlap,axisX,axisY,ob1,ob2);
+                    resolveImpulse(axisX,axisY,ob1,ob2,x,y);   
+                }
             }
         }
     }
@@ -616,6 +854,7 @@ function draw() {
     }
 
     function resolveImpulse(axisX,axisY,ob1,ob2,x,y){
+        drawCircle(x,y,5,'rgb(255,0,0)',true);
         var rx1 = ob1.comX - x;
         var ry1 = ob1.comY - y;
         var rx2 = ob2.comX - x;
@@ -625,83 +864,173 @@ function draw() {
         if(ob1.collisionType == 2 && ob2.collisionType == 2){
             var v1x = (ob1.xVelocity + ob1.wVelocity * ry1) - (ob2.xVelocity + ob2.wVelocity * ry2);
             var v1y = (ob1.yVelocity - ob1.wVelocity * rx1) - (ob2.yVelocity - ob2.wVelocity * rx2);
-            var j = ( (-(1 + e) * (v1x * axisX + v1y * axisY)) / ( (1/ob1.mass) + (1/ob2.mass) + (rn1/ob1.inertia) + (rn2/ob2.inertia) ));
-            if(ob1.sleep == true){
-                if(j > ob1.sleepThreshold * 100000){
-                    ob1.sleep = false;
-                    ob1ob2Impulse(rx1,rx2,ry1,ry2,rn1,rn2,ob1,ob2,axisX,axisY,x,y);
-                }else{
-                    ob2Impulse(rx2,ry2,rn2,ob2,axisX,axisY,x,y);
-                }
-            }else if(ob2.sleep == true){
-                if(j > ob2.sleepThreshold * 100000){
-                    ob2.sleep = false;
-                    ob1ob2Impulse(rx1,rx2,ry1,ry2,rn1,rn2,ob1,ob2,axisX,axisY,x,y);
-                }else{
-                    ob1Impulse(rx1,ry1,rn1,ob1,axisX,axisY,x,y);
-                }
-            }else{
-                ob1ob2Impulse(rx1,rx2,ry1,ry2,rn1,rn2,ob1,ob2,axisX,axisY,x,y);
-            }
+            var j = (-(1 + (ob1.restitution + ob2.restitution)/2) * (v1x * axisX + v1y * axisY)) / ( (1/ob1.mass) + (1/ob2.mass) + (rn1/ob1.inertia) + (rn2/ob2.inertia) );
+            ob2.ApplyImpulse(axisX,axisY,x,y,-j);
+            ob1.ApplyImpulse(axisX,axisY,x,y,j);
         }else if(ob1.collisionType == 2 && ob2.collisionType == 1){
-
-            ob1Impulse(rx1,ry1,rn1,ob1,axisX,axisY,x,y);
-
+            var v1x = (ob1.xVelocity + ob1.wVelocity * ry1);
+            var v1y = (ob1.yVelocity - ob1.wVelocity * rx1);
+            var j = ( (-(1 + (ob1.restitution + ob2.restitution)/2) * (v1x * axisX + v1y * axisY)) / ( (1/ob1.mass) + (rn1/ob1.inertia) ));
+            ob1.ApplyImpulse(axisX,axisY,x,y,j);
         }else if(ob1.collisionType == 1 && ob2.collisionType == 2){
-
-            ob2Impulse(rx2,ry2,rn2,ob2,axisX,axisY,x,y);
-           
+            var v1x = -(ob2.xVelocity + ob2.wVelocity * ry2);
+            var v1y = -(ob2.yVelocity - ob2.wVelocity * rx2);
+            var j = ( (-(1 + (ob1.restitution + ob2.restitution)/2) * (v1x * axisX + v1y * axisY)) / ( (1/ob2.mass) + (rn2/ob2.inertia) ));
+            ob2.ApplyImpulse(axisX,axisY,x,y,-j);
         }
+
+        var rvx = (ob1.xVelocity + ob1.wVelocity * ry1) - (ob2.xVelocity + ob2.wVelocity * ry2);
+        var rvy = (ob1.yVelocity - ob1.wVelocity * rx1) - (ob2.yVelocity - ob2.wVelocity * rx2);
+        var tanX = rvx - (rvx * axisX + rvy * axisY) * axisX;
+        var tanY = -rvy - (rvx * axisX + rvy * axisY) * axisY;
+        var mag = Math.sqrt(tanX * tanX + tanY * tanY);
+        if(mag > 0){
+            tanX /= mag;
+            tanY /= mag;
+        }else{
+            tanX = 0;
+            tanY = 0;
+        }
+
+        //drawLine(x,y,x + (tanX * 100),y + (tanY *100),'rgb(255,0,0)',10);
+        //drawLine(x,y,x + (axisX * 100),y + (axisY *100),'rgb(0,255,0)',10);
+
+        /*var r1 = Math.pow((rx1 * tanY - ry1 * tanX),2);
+        var r2 = Math.pow((rx2 * tanY - ry2 * tanX),2);
+        if(ob1.collisionType == 2 && ob2.collisionType == 2){
+            v1x = (ob1.xVelocity + ob1.wVelocity * ry1) - (ob2.xVelocity + ob2.wVelocity * ry2);
+            v1y = (ob1.yVelocity - ob1.wVelocity * rx1) - (ob2.yVelocity - ob2.wVelocity * rx2);
+            var jf = -(1 ) * (v1x * tanX + v1y * tanY) / ( (1/ob1.mass) + (1/ob2.mass) + (r1/ob1.inertia) + (r2/ob2.inertia) );
+        }else if(ob1.collisionType == 2 && ob2.collisionType == 1){
+            v1x = (ob1.xVelocity + ob1.wVelocity * ry1);
+            v1y = (ob1.yVelocity - ob1.wVelocity * rx1);
+            var jf = -(1 ) * (v1x * tanX + v1y * tanY) / ( (1/ob1.mass) + (r1/ob1.inertia) );
+        }else if(ob1.collisionType == 1 && ob2.collisionType == 2){
+            v1x = -(ob2.xVelocity + ob2.wVelocity * ry2);
+            v1y = -(ob2.yVelocity - ob2.wVelocity * rx2);
+            var jf =  -(1 ) * (v1x * tanX + v1y * tanY) / ( (1/ob2.mass) + (r1/ob2.inertia) );
+        }
+
+        var mu = Math.sqrt(ob1.staticFrict * ob1.staticFrict + ob2.staticFrict * ob2.staticFrict);
+        if(Math.abs(jf) > Math.abs(j * mu)){
+            var df = Math.sqrt(ob1.dynamicFrict * ob1.dynamicFrict + ob2.dynamicFrict * ob2.dynamicFrict);
+            jf = -j * df;
+        }
+
+        if(ob1.collisionType == 2 && ob2.collisionType == 2){
+            ob2.ApplyImpulse(tanX,tanY,x,y,-jf);
+            ob1.ApplyImpulse(tanX,tanY,x,y,jf);
+        }else if(ob1.collisionType == 2 && ob2.collisionType == 1){
+            ob1.ApplyImpulse(tanX,tanY,x,y,jf);
+        }else if(ob1.collisionType == 1 && ob2.collisionType == 2){
+            ob2.ApplyImpulse(tanX,tanY,x,y,-jf);
+        }*/
+
+
+        var jt = -(rvx * tanX + rvy * tanY);
+        var r1 = Math.pow((rx1 * tanY - ry1 * tanX),2);
+        var r2 = Math.pow((rx2 * tanY - ry2 * tanX),2);
+        if(ob1.collisionType == 2 && ob2.collisionType == 2){
+            jt /= ((1/ob1.mass) + (1/ob2.mass) + (r1/ob1.inertia) + (r2/ob2.inertia));
+        }else if(ob1.collisionType == 2 && ob2.collisionType == 1){
+            jt /= ((1/ob1.mass) + (r1/ob1.inertia));
+        }else if(ob1.collisionType == 1 && ob2.collisionType == 2){
+            jt /= ((1/ob2.mass) + (r2/ob2.inertia));
+        }
+        var mu = Math.sqrt(ob1.staticFrict * ob1.staticFrict + ob2.staticFrict * ob2.staticFrict);
+        var fx;
+        var fy;
+        if(Math.abs(jt) < j * mu){
+            fx = jt * tanX;
+            fy = jt * tanY;
+        }else{
+            var df = Math.sqrt(ob1.dynamicFrict * ob1.dynamicFrict + ob2.dynamicFrict * ob2.dynamicFrict);
+            fx = -j * tanX * df;
+            fy = -j * tanY * df;
+        }
+       
+        if(ob1.collisionType == 2 && ob2.collisionType == 2){
+            ob1.xVelocity += fx / ob1.mass;
+            ob1.yVelocity += fy / ob1.mass;
+            ob1.wVelocity -= (rx1 * fy - ry1 * fx) / ob1.inertia;
+            ob2.xVelocity -= fx / ob2.mass;
+            ob2.yVelocity -= fy / ob2.mass;
+            ob2.wVelocity += (rx2 * fy - ry2 * fx) / ob2.inertia;
+        }else if(ob1.collisionType == 2 && ob2.collisionType == 1){
+            ob1.xVelocity += fx / ob1.mass;
+            ob1.yVelocity += fy / ob1.mass;
+            ob1.wVelocity -= (rx1 * fy - ry1 * fx) / ob1.inertia;
+        }else if(ob1.collisionType == 1 && ob2.collisionType == 2){
+            ob2.xVelocity -= fx / ob2.mass;
+            ob2.yVelocity -= fy / ob2.mass;
+            ob2.wVelocity += (rx2 * fy - ry2 * fx) / ob2.inertia;
+        }
+
+        
+       
+        /*if(ob1.collisionType == 2 && ob2.collisionType == 2){
+            v1x = (ob1.xVelocity + ob1.wVelocity * ry1) - (ob2.xVelocity + ob2.wVelocity * ry2);
+            v1y = (ob1.yVelocity - ob1.wVelocity * rx1) - (ob2.yVelocity - ob2.wVelocity * rx2);
+            var jf = -(1 + (ob1.restitution + ob2.restitution)/2) * (v1x * tanX + v1y * tanY) / ( (1/ob1.mass) + (1/ob2.mass) + (r1/ob1.inertia) + (r2/ob2.inertia) );
+        }else if(ob1.collisionType == 2 && ob2.collisionType == 1){
+            v1x = (ob1.xVelocity + ob1.wVelocity * ry1);
+            v1y = (ob1.yVelocity - ob1.wVelocity * rx1);
+            var jf = -(1 + (ob1.restitution + ob2.restitution)/2) * (v1x * tanX + v1y * tanY) / ( (1/ob1.mass) + (r1/ob1.inertia) );
+        }else if(ob1.collisionType == 1 && ob2.collisionType == 2){
+            v1x = -(ob2.xVelocity + ob2.wVelocity * ry2);
+            v1y = -(ob2.yVelocity - ob2.wVelocity * rx2);
+            var jf =  -(1 + (ob1.restitution + ob2.restitution)/2) * (v1x * tanX + v1y * tanY) / ( (1/ob2.mass) + (r1/ob2.inertia) );
+        }
+
+        
+        //console.log('j  ' + Math.abs(j * mu));
+        //console.log('jf  ' + Math.abs(jf));
+        if(true){
+            var df = Math.sqrt(ob1.dynamicFrict * ob1.dynamicFrict + ob2.dynamicFrict * ob2.dynamicFrict);
+            jf = -j * df;
+        }
+
+        if(ob1.collisionType == 2 && ob2.collisionType == 2){
+            ob2.ApplyImpulse(tanX,tanY,x,y,-jf);
+            ob1.ApplyImpulse(tanX,tanY,x,y,jf);
+        }else if(ob1.collisionType == 2 && ob2.collisionType == 1){
+            ob1.ApplyImpulse(tanX,tanY,x,y,-jf);
+        }else if(ob1.collisionType == 1 && ob2.collisionType == 2){
+            ob2.ApplyImpulse(tanX,tanY,x,y,-jf);
+        }*/
     }
 
-    function ob1ob2Impulse(rx1,rx2,ry1,ry2,rn1,rn2,ob1,ob2,axisX,axisY,x,y){
-        var v1x = (ob1.xVelocity + ob1.wVelocity * ry1) - (ob2.xVelocity + ob2.wVelocity * ry2);
-        var v1y = (ob1.yVelocity - ob1.wVelocity * rx1) - (ob2.yVelocity - ob2.wVelocity * rx2);
-        var j = ( (-(1 + e) * (v1x * axisX + v1y * axisY)) / ( (1/ob1.mass) + (1/ob2.mass) + (rn1/ob1.inertia) + (rn2/ob2.inertia) ));
-        ob2.ApplyImpulse(axisX,axisY,x,y,-j);
-        ob1.ApplyImpulse(axisX,axisY,x,y,j);
-    }
-
-    function ob1Impulse(rx1,ry1,rn1,ob1,axisX,axisY,x,y){
-        var v1x = (ob1.xVelocity + ob1.wVelocity * ry1);
-        var v1y = (ob1.yVelocity - ob1.wVelocity * rx1);
-        var j = ( (-(1 + e) * (v1x * axisX + v1y * axisY)) / ( (1/ob1.mass) + (rn1/ob1.inertia) ));
-        ob1.ApplyImpulse(axisX,axisY,x,y,j);
-    }
-
-    function ob2Impulse(rx2,ry2,rn2,ob2,axisX,axisY,x,y){
-        var v1x = -(ob2.xVelocity + ob2.wVelocity * ry2);
-        var v1y = -(ob2.yVelocity - ob2.wVelocity * rx2);
-        var j = ( (-(1 + e) * (v1x * axisX + v1y * axisY)) / ( (1/ob2.mass) + (rn2/ob2.inertia) ));
-        ob2.ApplyImpulse(axisX,axisY,x,y,-j);
-    }
-    
     //Object Generation
 
-    polygons.push(new Polygon([0,0,50,50],[0,gameArea.height,gameArea.height,0],1,'rgb(255,0,0)'));
-    polygons.push(new Polygon([gameArea.width,gameArea.width,gameArea.width - 50,gameArea.width - 50],[0,gameArea.height,gameArea.height,0],1,'rgb(255,0,0)'));
-    polygons.push(new Polygon([50,50,gameArea.width - 50,gameArea.width - 50],[0,50,50,0],1,'rgb(255,0,0)'));
-    polygons.push(new Polygon([50,50,gameArea.width - 50,gameArea.width - 50],[gameArea.height,gameArea.height - 50,gameArea.height - 50,gameArea.height],1,'rgb(255,0,0)'));
+    var wood = new Material(0.6,0.5,1,0.1);
+    bodies.push(new Polygon([0,0,50,50],[0,gameArea.height,gameArea.height,0],1,wood,'rgb(255,0,0)'));
+    bodies.push(new Polygon([gameArea.width,gameArea.width,gameArea.width - 50,gameArea.width - 50],[0,gameArea.height,gameArea.height,0],1,wood,'rgb(255,0,0)'));
+    bodies.push(new Polygon([50,50,gameArea.width - 50,gameArea.width - 50],[0,50,50,0],1,wood,'rgb(255,0,0)'));
+    bodies.push(new Polygon([50,50,gameArea.width - 50,gameArea.width - 50],[gameArea.height,gameArea.height - 250,gameArea.height - 50,gameArea.height],1,wood,'rgb(255,0,0)'));
 
-    for(var i = 0; i < 200; i++){
-        generateRandomPolygon(gameArea.width/2,500,25,25,getRndInteger(10,20),'rgb(100,100,100)',2);
-        polygons[polygons.length - 1].xVelocity = getRndInteger(-50,50);
-        polygons[polygons.length - 1].yVelocity = getRndInteger(-50,50);
-        polygons[polygons.length - 1].wVelocity = getRndInteger(-50,50);
+    //bodies.push(new Circle(500,500,50,2,wood,'rgb(255,0,0)'));
+    //bodies[4].xVelocity = 100;
+    
+    for(var i = 0; i < 5; i++){
+        generateRandomPolygon(250,500,250,250,getRndInteger(10,20),2,wood,'rgb(100,100,100)');
+        //bodies[bodies.length - 1].xVelocity = getRndInteger(-100,100);
+        //bodies[bodies.length - 1].yVelocity = getRndInteger(-100,100);
+        //bodies[bodies.length - 1].wVelocity = getRndInteger(-10,10);
+        bodies.push(new Circle(250,500,getRndInteger(125,75),2,wood,'rgb(100,100,100)'));
+        //bodies[bodies.length - 1].xVelocity = getRndInteger(-100,100);
+        //bodies[bodies.length - 1].yVelocity = getRndInteger(-100,100);
+        //bodies[bodies.length - 1].wVelocity = getRndInteger(-10,10);
     }
-    for(var i = 4; i < polygons.length; i ++){
-        //polygons[i].ay = 200;
+    for(var i = 4; i < bodies.length; i ++){
+        bodies[i].ay = 1000;
     }
-
-    //Drawing and Updating
-
+    
+    
     function refresh(){
-        //polygons[0].MoveTo(mouseX,mouseY);
         draw.clearRect(0, 0, gameArea.width, gameArea.height);
         refreshTime();
-        renderObject(polygons);
-        renderFps();
-        
+        renderObject(bodies);
+        resetCollisions();
         window.requestAnimationFrame(refresh);
     }
     window.requestAnimationFrame(refresh);
