@@ -4,7 +4,7 @@ var mouseDown = false;
 var mouseX = 0;
 var mouseY = 0;
 var bodies = [];
-var springs = [];
+var constraints = [];
 var d = 0;
 var fill = false;
 var fps = 0;
@@ -181,15 +181,15 @@ function draw() {
                 bodies.push(new Circle(x + (i * objDistance),y + (j * objDistance),objDistance/3,colType,material,color));
                 bodies[bodies.length - 1].rotation = false;
                 if(j > 0){
-                    springs.push(new Spring(bodies[bodies.length - 1],bodies[bodies.length - 2],d,objDistance,k));
+                    constraints.push(new Spring(bodies[bodies.length - 1],bodies[bodies.length - 2],d,objDistance,k));
                     if(i > 0){
-                        springs.push(new Spring(bodies[bodies.length - 1],bodies[bodies.length - (2 + h)],d,objDistance2,k));
+                        constraints.push(new Spring(bodies[bodies.length - 1],bodies[bodies.length - (2 + h)],d,objDistance2,k));
                     }
                 }
                 if(i > 0){
-                    springs.push(new Spring(bodies[bodies.length - 1],bodies[bodies.length - (1 + h)],d,objDistance,k));
+                    constraints.push(new Spring(bodies[bodies.length - 1],bodies[bodies.length - (1 + h)],d,objDistance,k));
                     if(j < h - 1){
-                        springs.push(new Spring(bodies[bodies.length - 1],bodies[bodies.length - h],d,objDistance2,k));
+                        constraints.push(new Spring(bodies[bodies.length - 1],bodies[bodies.length - h],d,objDistance2,k));
                     }
                 }
             }
@@ -223,11 +223,7 @@ function draw() {
             bodies[i].col = [];
             bodies[i].Render();
         }
-        for(var i = 0; i < springs.length; i++){
-            deleted = 0;
-            springs[i].Render();
-            i -= deleted;
-        }
+        
     }
 
     //Drawing Functions
@@ -271,13 +267,24 @@ function draw() {
 
     function updatePhysics(){
         for(var i = 0; i < bodies.length; i++){
+            bodies[i].xDisplacment = 0;
+            bodies[i].yDisplacment = 0;
+        }
+        for(var i = 0; i < bodies.length; i++){
             deleted = 0;
             bodies[i].CheckCollision();
             i -= deleted;
         }
+        for(var i = 0; i < constraints.length; i++){
+            deleted = 0;
+            constraints[i].Render();
+            i -= deleted;
+        }
+        
     }
 
     //objects
+
     class Circle {
         constructor(x,y,r,collisionType,material,color){
             this.x = x;
@@ -354,8 +361,6 @@ function draw() {
             if(this.wVelocity != 0 && this.rotation){
                 this.Rotate(this.wVelocity * timeChange,this.comX,this.comY);
             }
-            this.comX = this.x;
-            this.comY = this.y;
         }
 
         CheckCollision(){
@@ -376,13 +381,17 @@ function draw() {
 
         Move(distanceX,distanceY){
             this.x += distanceX;
-            this.y += distanceY
+            this.y += distanceY;
+            this.comX = this.x;
+            this.comY = this.y;
             this.GetMinMax();
         }
 
         MoveTo(x,y){
             this.x = x;
             this.y = y;
+            this.comX = this.x;
+            this.comY = this.y;
             this.GetMinMax();
         }
 
@@ -612,13 +621,66 @@ function draw() {
                 var fs = (vec - this.l) * this.k;
                 var ft = fs - fd;
                 this.ob1.ApplyImpulse(dx,dy,this.ob1.comX,this.ob1.comY,-ft);
-                this.ob2.ApplyImpulse(dx,dy,this.ob1.comX,this.ob1.comY,ft)
+                this.ob2.ApplyImpulse(dx,dy,this.ob2.comX,this.ob2.comY,ft)
             }
         }
 
         Delete(){
-            var indexToDelete = springs.indexOf(this);
-            springs.splice(indexToDelete, 1);
+            var indexToDelete = constraints.indexOf(this);
+            constraints.splice(indexToDelete, 1);
+            deleted += 1;
+        }
+    }
+
+    class Pole{
+        constructor(ob1,ob2){
+            this.ob1 = ob1;
+            this.ob2 = ob2;
+            this.x1 = ob1.comX;
+            this.y1 = ob1.comY;
+            this.x2 = ob2.comX;
+            this.y2 = ob2.comY
+            var dx = this.x1 - this.x2;
+            var dy = this.y1 - this.y2;
+            this.l = Math.sqrt(dx * dx + dy * dy);
+        }
+
+        Render(){
+            drawLine(this.ob1.comX,this.ob1.comY,this.ob2.comX,this.ob2.comY,'rgb(255,255,255)',2);
+            this.Update();
+        }
+
+        Update(){
+            this.x1 = this.ob1.comX;
+            this.y1 = this.ob1.comY;
+            this.x2 = this.ob2.comX;
+            this.y2 = this.ob2.comY;
+            var rx1 = this.ob1.comX - this.x1;
+            var ry1 = this.ob1.comY - this.y1;
+            var rx2 = this.ob2.comX - this.x2;
+            var ry2 = this.ob2.comY - this.y2;
+            var axisX = this.x1 - this.x2;
+            var axisY = this.y1 - this.y2;
+            var l = Math.sqrt(axisX * axisX + axisY * axisY);
+            console.log(l);
+            axisX /= l;
+            axisY /= l;
+            var rn1 = Math.pow((rx1 * axisY) - (ry1 * axisX),2) / this.ob1.inertia;
+            var rn2 = Math.pow((rx2 * axisY) - (ry2 * axisX),2) / this.ob2.inertia;
+            var dx = (this.ob1.xVelocity + this.ob1.wVelocity * ry1) - (this.ob2.xVelocity + this.ob2.wVelocity * ry2);
+            var dy = (this.ob1.yVelocity - this.ob1.wVelocity * rx1) - (this.ob2.yVelocity - this.ob2.wVelocity * rx2);
+            var impulse = -2 * (dx * axisX + dy * axisY) / ((1/this.ob1.mass) + (1/this.ob2.mass) + rn1 + rn2);
+            this.ob1.ApplyImpulse(axisX,axisY,this.x1,this.y1,impulse);
+            this.ob2.ApplyImpulse(axisX,axisY,this.x2,this.y2,-impulse);
+            var objDx = ((axisX * this.l) - (axisX * l))/2;
+            var objDy = ((axisY * this.l) - (axisY * l))/2;
+            this.ob1.Move(objDx,objDy);
+            this.ob2.Move(-objDx,-objDy);
+        }
+
+        Delete(){
+            var indexToDelete = constraints.indexOf(this);
+            constraints.splice(indexToDelete, 1);
             deleted += 1;
         }
     }
@@ -631,7 +693,6 @@ function draw() {
             this.dynamicFrict = dynamicFrict;
         }
     }
-
 
     //collision
 
@@ -1002,48 +1063,42 @@ function draw() {
         }else if(ob1.collisionType == 1 && ob2.collisionType == 2){
             ob2.ApplyImpulse(tanX,tanY,x,y,-jt);
         }
-        //drawLine(ob1.comX,ob1.comY,ob1.comX + (tanX * jt/100),ob1.comY + (tanY * jt/100),'rgb(255,0,0)',10);
-        //drawLine(ob2.comX,ob2.comY,ob2.comX + (tanX * -jt/100),ob2.comY + (tanY * -jt/100),'rgb(255,0,0)',10);
-        //drawLine(x,y,x + (tanX * 100),y + (tanY * 100),'rgb(255,0,0)',10);
-        //drawLine(x,y,x + (axisX * 100),y + (axisY *100),'rgb(0,255,0)',10);
     }
 
     //Object Generation
 
-    var wood = new Material(0.6,0.2,0.2,0.1);
-    var softBody = new Material(0.3,0.2,0,0);
+    var wood = new Material(0.6,0.8,0.2,0.1);
     bodies.push(new Polygon([0,0,50,50],[0,gameArea.height,gameArea.height,0],1,wood,'rgb(255,0,0)'));
     bodies.push(new Polygon([gameArea.width,gameArea.width,gameArea.width - 50,gameArea.width - 50],[0,gameArea.height,gameArea.height,0],1,wood,'rgb(255,0,0)'));
     bodies.push(new Polygon([50,50,gameArea.width - 50,gameArea.width - 50],[0,50,50,0],1,wood,'rgb(255,0,0)'));
     bodies.push(new Polygon([50,50,gameArea.width - 50,gameArea.width - 50],[gameArea.height,gameArea.height - 50,gameArea.height - 50,gameArea.height],1,wood,'rgb(255,0,0)'));
 
-    //bodies.push(new Circle(500,500,50,2,wood,'rgb(255,0,0)'));
-    //bodies[4].xVelocity = 100;
+    bodies.push(new Circle(500,800,50,1,wood,'rgb(255,0,0)'));
     
-    for(var i = 0; i < 4; i++){
+    for(var i = 0; i < 1; i++){
         generateRandomPolygon(250,300,150,150,getRndInteger(10,20),2,wood,'rgb(100,100,100)');
-        //bodies[bodies.length - 1].xVelocity = getRndInteger(-100,100);
-        //bodies[bodies.length - 1].yVelocity = getRndInteger(-100,100);
-        //bodies[bodies.length - 1].wVelocity = getRndInteger(-10,10);
-        bodies.push(new Circle(300,300,getRndInteger(75,50),2,wood,'rgb(100,100,100)'));
-        //bodies[bodies.length - 1].rotation = false;
-        //bodies[bodies.length - 1].xVelocity = getRndInteger(-100,100);
-        //bodies[bodies.length - 1].yVelocity = getRndInteger(-100,100);
-        //bodies[bodies.length - 1].wVelocity = getRndInteger(-10,10);
+        bodies[bodies.length - 1].xVelocity = getRndInteger(-1000,1000);
+        bodies[bodies.length - 1].yVelocity = getRndInteger(-1000,1000);
+        bodies.push(new Circle(800,300,getRndInteger(75,50),2,wood,'rgb(100,100,100)'));
+        constraints.push(new Pole(bodies[bodies.length - 2],bodies[bodies.length - 1]));
     }
     
-    //generateSoftBody(100,300,5,4,50,15,6000,2,softBody,'rgb(255,0,0)');
-    for(var i = 4; i < bodies.length; i ++){
-        bodies[i].ay = 1000;
+    //generateSoftBody(500,300,10,5,40,30,2500,2,softBody,'rgb(255,0,0)');
+    //generateSoftBody(500,300,10,4,50,15,6000,2,softBody,'rgb(255,0,0)');
+    for(var i = 5; i < bodies.length; i ++){
+        bodies[i].ay = 3000;
     }
     
     
 
     function refresh(){
+        bodies[4].MoveTo(mouseX,mouseY);
         draw.clearRect(0, 0, gameArea.width, gameArea.height);
         refreshTime();
+        
         updatePhysics();
         render();
+        
         window.requestAnimationFrame(refresh);
     }
     window.requestAnimationFrame(refresh);
