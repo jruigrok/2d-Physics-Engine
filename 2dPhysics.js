@@ -5,7 +5,7 @@ var mouseX = 0;
 var mouseY = 0;
 var bodies = [];
 var constraints = [];
-var d = 0;
+var d = 1;
 var fill = false;
 var fps = 0;
 var timeChange = 0;
@@ -24,32 +24,32 @@ function draw() {
     var ctx = gameArea.getContext('2d');
   
     if (gameArea.getContext) {
-      var draw = gameArea.getContext('2d');
+        var draw = gameArea.getContext('2d');
     }
   
     document.body.onmousedown = function() {
-      ++mouseDown;
+        ++mouseDown;
     }
     document.body.onmouseup = function() {
-      --mouseDown;
-      click = false;
+        --mouseDown;
+        click = false;
     }
   
     function getMousePosition(canvas, event) {
-      let rect = gameArea.getBoundingClientRect();
-      mouseX = event.clientX - rect.left;
-      mouseY = event.clientY - rect.top;
+        let rect = gameArea.getBoundingClientRect();
+        mouseX = event.clientX - rect.left;
+        mouseY = event.clientY - rect.top;
     }
   
     gameArea.addEventListener('mousemove', function(e) {
-      getMousePosition('gameArea', e);
+        getMousePosition('gameArea', e);
     });
   
     window.onkeyup = function(e) { pressedKeys[e.keyCode] = false; }
     window.onkeydown = function(e) { pressedKeys[e.keyCode] = true; }
   
     function getRndInteger(min, max) {
-      return Math.floor(Math.random() * (max - min + 1)) + min;
+        return Math.floor(Math.random() * (max - min + 1)) + min;
     }
 
     function getStandardDeviation(array) {
@@ -180,6 +180,7 @@ function draw() {
             for(var j = 0; j < h; j++){
                 bodies.push(new Circle(x + (i * objDistance),y + (j * objDistance),objDistance/3,colType,material,color));
                 bodies[bodies.length - 1].rotation = false;
+                bodies[bodies.length - 1].gravity = 1000;
                 if(j > 0){
                     constraints.push(new Spring(bodies[bodies.length - 1],bodies[bodies.length - 2],d,objDistance,k));
                     if(i > 0){
@@ -215,7 +216,7 @@ function draw() {
         time = milliSeconds/1000
         time += seconds;
         timeChange = time - last;
-        //fps = Math.round(1 / (time - last));
+        fps = Math.round(1 / (time - last));
     }
 
     function render(){
@@ -223,7 +224,12 @@ function draw() {
             bodies[i].col = [];
             bodies[i].Render();
         }
-        
+        for(var i = 0; i < constraints.length; i++){
+            constraints[i].Render();
+        }
+    }
+    function applyGravity(obj,acceleration){
+        obj.yVelocity += acceleration * timeChange;
     }
 
     //Drawing Functions
@@ -267,20 +273,16 @@ function draw() {
 
     function updatePhysics(){
         for(var i = 0; i < bodies.length; i++){
-            bodies[i].xDisplacment = 0;
-            bodies[i].yDisplacment = 0;
-        }
-        for(var i = 0; i < bodies.length; i++){
             deleted = 0;
+            applyGravity(bodies[i],bodies[i].gravity);
             bodies[i].CheckCollision();
             i -= deleted;
         }
         for(var i = 0; i < constraints.length; i++){
             deleted = 0;
-            constraints[i].Render();
+            constraints[i].Update();
             i -= deleted;
         }
-        
     }
 
     //objects
@@ -316,6 +318,7 @@ function draw() {
             this.type = 'circle';
             this.col = [];
             this.rotation = true;
+            this.gravity = 0;
         }
 
         GetMinMax(){
@@ -350,8 +353,6 @@ function draw() {
         }
 
         Update(){
-            this.xVelocity += this.ax * timeChange;
-            this.yVelocity += this.ay * timeChange;
             this.xVelocity -= this.xVelocity * d * timeChange;
             this.yVelocity -= this.yVelocity * d * timeChange;
             if(this.rotation){
@@ -364,16 +365,18 @@ function draw() {
         }
 
         CheckCollision(){
-            for(var i = 0; i < bodies.length; i++){
-                if(bodies[i] != this){
-                    var collide = true;
-                    for(var j = 0; j < this.col.length; j++){
-                        if(this.col[j] == bodies[i]){
-                            collide = false;
+            if(this.collisionType != 3){
+                for(var i = 0; i < bodies.length; i++){
+                    if(bodies[i] != this && bodies[i].collisionType != 3){
+                        var collide = true;
+                        for(var j = 0; j < this.col.length; j++){
+                            if(this.col[j] == bodies[i]){
+                                collide = false;
+                            }
                         }
-                    }
-                    if(collide){
-                        checkCollision(this,bodies[i]);
+                        if(collide){
+                            checkCollision(this,bodies[i]);
+                        }
                     }
                 }
             }
@@ -384,7 +387,6 @@ function draw() {
             this.y += distanceY;
             this.comX = this.x;
             this.comY = this.y;
-            this.GetMinMax();
         }
 
         MoveTo(x,y){
@@ -392,7 +394,6 @@ function draw() {
             this.y = y;
             this.comX = this.x;
             this.comY = this.y;
-            this.GetMinMax();
         }
 
         ApplyImpulse(axisX,axisY,x,y,j){
@@ -403,6 +404,7 @@ function draw() {
             if(this.rotation){
                 this.wVelocity -= (rx * j * axisY - ry * j * axisX) / this.inertia;
             }
+            //drawLine(x,y,x + (axisX * j)/this.mass,y + (axisY * j)/this.mass,'rgb(255,255,255)',1);
         }
 
         Delete(){
@@ -448,6 +450,7 @@ function draw() {
             this.type = 'polygon';
             this.col = [];
             this.rotation = true;
+            this.gravity = 0;
         }
 
         GetMinMax(){
@@ -510,7 +513,6 @@ function draw() {
             }
             this.comX = pointX + ((this.comX - pointX) * cos) - ((this.comY - pointY) * sin);
             this.comY = pointY + ((this.comY - pointY) * cos) + ((this.comX - pointX) * sin);
-            this.GetMinMax();
         }
 
         GetMags(){
@@ -532,8 +534,6 @@ function draw() {
         }
 
         Update(){
-            this.xVelocity += this.ax * timeChange;
-            this.yVelocity += this.ay * timeChange;
             this.xVelocity -= this.xVelocity * d * timeChange;
             this.yVelocity -= this.yVelocity * d * timeChange;
             if(this.rotation){
@@ -546,16 +546,18 @@ function draw() {
         }
 
         CheckCollision(){
-            for(var i = 0; i < bodies.length; i++){
-                if(bodies[i] != this){
-                    var collide = true;
-                    for(var j = 0; j < this.col.length; j++){
-                        if(this.col[j] == bodies[i]){
-                            collide = false;
+            if(this.collisionType != 3){
+                for(var i = 0; i < bodies.length; i++){
+                    if(bodies[i] != this && bodies[i].collisionType != 3){
+                        var collide = true;
+                        for(var j = 0; j < this.col.length; j++){
+                            if(this.col[j] == bodies[i]){
+                                collide = false;
+                            }
                         }
-                    }
-                    if(collide){
-                        checkCollision(this,bodies[i]);
+                        if(collide){
+                            checkCollision(this,bodies[i]);
+                        }
                     }
                 }
             }
@@ -570,7 +572,6 @@ function draw() {
             this.dy += distanceY;
             this.comX += distanceX;
             this.comY += distanceY;
-            this.GetMinMax();
         }
 
         MoveTo(x,y){
@@ -587,6 +588,7 @@ function draw() {
             if(this.rotation){
                 this.wVelocity -= (rx * j * axisY - ry * j * axisX) / this.inertia;
             }
+            //drawLine(x,y,x + (axisX * j)/this.mass,y + (axisY * j)/this.mass,'rgb(255,255,255)',1);
         }
 
         Delete(){
@@ -607,7 +609,6 @@ function draw() {
 
         Render(){
             drawLine(this.ob1.comX,this.ob1.comY,this.ob2.comX,this.ob2.comY,'#8a8a8a',2);
-            this.Update();
         }
 
         Update(){
@@ -636,46 +637,41 @@ function draw() {
         constructor(ob1,ob2){
             this.ob1 = ob1;
             this.ob2 = ob2;
-            this.x1 = ob1.comX;
-            this.y1 = ob1.comY;
-            this.x2 = ob2.comX;
-            this.y2 = ob2.comY
-            var dx = this.x1 - this.x2;
-            var dy = this.y1 - this.y2;
+            var dx = this.ob1.comX - this.ob2.comX;
+            var dy = this.ob1.comY - this.ob2.comY;
             this.l = Math.sqrt(dx * dx + dy * dy);
         }
 
         Render(){
             drawLine(this.ob1.comX,this.ob1.comY,this.ob2.comX,this.ob2.comY,'rgb(255,255,255)',2);
-            this.Update();
         }
 
         Update(){
-            this.x1 = this.ob1.comX;
-            this.y1 = this.ob1.comY;
-            this.x2 = this.ob2.comX;
-            this.y2 = this.ob2.comY;
-            var rx1 = this.ob1.comX - this.x1;
-            var ry1 = this.ob1.comY - this.y1;
-            var rx2 = this.ob2.comX - this.x2;
-            var ry2 = this.ob2.comY - this.y2;
-            var axisX = this.x1 - this.x2;
-            var axisY = this.y1 - this.y2;
+            var axisX = this.ob1.comX - this.ob2.comX;
+            var axisY = this.ob1.comY - this.ob2.comY;
             var l = Math.sqrt(axisX * axisX + axisY * axisY);
-            console.log(l);
             axisX /= l;
             axisY /= l;
-            var rn1 = Math.pow((rx1 * axisY) - (ry1 * axisX),2) / this.ob1.inertia;
-            var rn2 = Math.pow((rx2 * axisY) - (ry2 * axisX),2) / this.ob2.inertia;
-            var dx = (this.ob1.xVelocity + this.ob1.wVelocity * ry1) - (this.ob2.xVelocity + this.ob2.wVelocity * ry2);
-            var dy = (this.ob1.yVelocity - this.ob1.wVelocity * rx1) - (this.ob2.yVelocity - this.ob2.wVelocity * rx2);
-            var impulse = -2 * (dx * axisX + dy * axisY) / ((1/this.ob1.mass) + (1/this.ob2.mass) + rn1 + rn2);
-            this.ob1.ApplyImpulse(axisX,axisY,this.x1,this.y1,impulse);
-            this.ob2.ApplyImpulse(axisX,axisY,this.x2,this.y2,-impulse);
             var objDx = ((axisX * this.l) - (axisX * l))/2;
             var objDy = ((axisY * this.l) - (axisY * l))/2;
-            this.ob1.Move(objDx,objDy);
-            this.ob2.Move(-objDx,-objDy);
+            var dx = this.ob2.xVelocity - this.ob1.xVelocity;
+            var dy = this.ob2.yVelocity - this.ob1.yVelocity;
+            var dot = dx * axisX + dy * axisY;
+            if(this.ob1.collisionType == 2 && this.ob2.collisionType == 2){
+                this.ob1.Move(objDx,objDy);
+                this.ob2.Move(-objDx,-objDy);
+                var impulse = -2 * dot / (1/this.ob1.mass + 1/this.ob2.mass);
+                this.ob1.ApplyImpulse(axisX,axisY,this.ob1.comX,this.ob1.comY,-impulse);
+                this.ob2.ApplyImpulse(axisX,axisY,this.ob2.comX,this.ob2.comY,impulse);
+            }else if(this.ob1.collisionType == 2 && this.ob2.collisionType == 1){
+                this.ob1.Move(2 * objDx,2 * objDy);
+                var impulse = -2 * dot / (1/this.ob1.mass);
+                this.ob1.ApplyImpulse(axisX,axisY,this.ob1.comX,this.ob1.comY,-impulse);
+            }else if(this.ob1.collisionType == 1 && this.ob2.collisionType == 2){
+                this.ob2.Move(-2 * objDx,-2 * objDy);
+                var impulse = -2 * dot * (1/this.ob2.mass);
+                this.ob2.ApplyImpulse(axisX,axisY,this.ob2.comX,this.ob2.comY,impulse);
+            }
         }
 
         Delete(){
@@ -699,6 +695,8 @@ function draw() {
     function checkCollision(ob1,ob2){
         ob1.col.push(ob2);
         ob2.col.push(ob1);
+        ob1.GetMinMax();
+        ob2.GetMinMax();
         if(!(ob1.maxX >= ob2.maxX && ob2.maxX <= ob1.minX || ob2.minX >= ob1.maxX && ob2.maxX >= ob1.maxX || ob1.maxY >= ob2.maxY && ob2.maxY <= ob1.minY || ob2.minY >= ob1.maxY && ob2.maxY >= ob1.maxY)){
             var collision =  true;
             if(ob1.type == 'polygon' && ob2.type == 'polygon'){
@@ -1067,38 +1065,44 @@ function draw() {
 
     //Object Generation
 
-    var wood = new Material(0.6,0.8,0.2,0.1);
+    var wood = new Material(0.6,0,0.2,0.1);
     bodies.push(new Polygon([0,0,50,50],[0,gameArea.height,gameArea.height,0],1,wood,'rgb(255,0,0)'));
     bodies.push(new Polygon([gameArea.width,gameArea.width,gameArea.width - 50,gameArea.width - 50],[0,gameArea.height,gameArea.height,0],1,wood,'rgb(255,0,0)'));
     bodies.push(new Polygon([50,50,gameArea.width - 50,gameArea.width - 50],[0,50,50,0],1,wood,'rgb(255,0,0)'));
     bodies.push(new Polygon([50,50,gameArea.width - 50,gameArea.width - 50],[gameArea.height,gameArea.height - 50,gameArea.height - 50,gameArea.height],1,wood,'rgb(255,0,0)'));
-
-    bodies.push(new Circle(500,800,50,1,wood,'rgb(255,0,0)'));
+    bodies.push(new Circle(400,200,50,2,wood,'rgb(0,255,0)'));
+    bodies[bodies.length - 1].gravity = 1000;
+    bodies.push(new Circle(600,200,50,2,wood,'rgb(0,255,0)'));
+    bodies[bodies.length - 1].gravity = 1000;
+    generateRandomPolygon(800,200,150,150,getRndInteger(20,30),2,wood,'rgb(0,255,0)');
+    bodies[bodies.length - 1].gravity = 1000;
+    constraints.push(new Pole(bodies[bodies.length - 1],bodies[bodies.length - 2]));
+    constraints.push(new Pole(bodies[bodies.length - 2],bodies[bodies.length - 3]));
     
-    for(var i = 0; i < 1; i++){
-        generateRandomPolygon(250,300,150,150,getRndInteger(10,20),2,wood,'rgb(100,100,100)');
-        bodies[bodies.length - 1].xVelocity = getRndInteger(-1000,1000);
-        bodies[bodies.length - 1].yVelocity = getRndInteger(-1000,1000);
-        bodies.push(new Circle(800,300,getRndInteger(75,50),2,wood,'rgb(100,100,100)'));
-        constraints.push(new Pole(bodies[bodies.length - 2],bodies[bodies.length - 1]));
+    
+    for(var i = 0; i < 15; i++){
+        generateRandomPolygon(250,300,150,150,getRndInteger(20,30),2,wood,'rgb(100,100,100)');
+        //bodies[bodies.length - 1].xVelocity = getRndInteger(-1000,1000);
+        //bodies[bodies.length - 1].yVelocity = getRndInteger(-1000,1000);
+        bodies[bodies.length - 1].gravity = 1000;
+        //generateRandomPolygon(550,300,150,150,getRndInteger(10,20),2,wood,'rgb(100,100,100)');
+        bodies.push(new Circle(800 + i,300 + i,getRndInteger(75,50),2,wood,'rgb(100,100,100)'));
+        bodies[bodies.length - 1].gravity = 1000;
+        //constraints.push(new Pole(bodies[bodies.length - 1],bodies[bodies.length - 2]));
     }
     
-    //generateSoftBody(500,300,10,5,40,30,2500,2,softBody,'rgb(255,0,0)');
-    //generateSoftBody(500,300,10,4,50,15,6000,2,softBody,'rgb(255,0,0)');
-    for(var i = 5; i < bodies.length; i ++){
-        bodies[i].ay = 3000;
-    }
+    //generateSoftBody(1000,600,5,5,40,10,10000,2,wood,'rgb(255,0,0)');
+    //generateSoftBody(300,600,10,4,50,10,10000,2,wood,'rgb(255,0,0)');
     
     
 
     function refresh(){
-        bodies[4].MoveTo(mouseX,mouseY);
+        //bodies[0].MoveTo(mouseX,mouseY);
         draw.clearRect(0, 0, gameArea.width, gameArea.height);
         refreshTime();
-        
         updatePhysics();
         render();
-        
+        renderFps();
         window.requestAnimationFrame(refresh);
     }
     window.requestAnimationFrame(refresh);
